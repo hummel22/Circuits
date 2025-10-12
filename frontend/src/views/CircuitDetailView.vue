@@ -29,10 +29,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import CircuitForm from '../components/CircuitForm.vue';
 import { getCircuit, updateCircuit, deleteCircuit } from '../api';
+import { useCircuitTitle } from '../composables/useCircuitTitle';
 
 const props = defineProps({
   id: {
@@ -43,6 +44,7 @@ const props = defineProps({
 
 const route = useRoute();
 const router = useRouter();
+const { setCircuitContext, clearCircuitContext } = useCircuitTitle();
 
 const circuit = ref(null);
 const loaded = ref(false);
@@ -53,9 +55,19 @@ async function loadCircuit(circuitId) {
   loaded.value = false;
   try {
     circuit.value = await getCircuit(circuitId);
+    if (circuit.value?.name) {
+      const circuitId =
+        circuit.value?.id !== undefined && circuit.value?.id !== null
+          ? String(circuit.value.id)
+          : props.id;
+      setCircuitContext(circuit.value.name, circuitId);
+    } else {
+      clearCircuitContext();
+    }
   } catch (err) {
     circuit.value = null;
     error.value = err instanceof Error ? err.message : 'Failed to load circuit';
+    clearCircuitContext();
   } finally {
     loaded.value = true;
   }
@@ -67,6 +79,13 @@ async function handleSubmit(payload) {
   try {
     const updated = await updateCircuit(props.id, payload);
     circuit.value = updated;
+    if (updated?.name) {
+      const circuitId =
+        updated?.id !== undefined && updated?.id !== null
+          ? String(updated.id)
+          : props.id;
+      setCircuitContext(updated.name, circuitId);
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to update circuit';
   } finally {
@@ -99,4 +118,8 @@ watch(
     }
   }
 );
+
+onBeforeUnmount(() => {
+  clearCircuitContext();
+});
 </script>

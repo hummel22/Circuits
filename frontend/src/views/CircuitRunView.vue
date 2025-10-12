@@ -35,15 +35,7 @@
         </div>
       </div>
 
-      <div class="accent-card">
-        <h3>{{ activeTask ? activeTask.name : 'Circuit complete!' }}</h3>
-        <p v-if="activeTask" class="muted">{{ activeTask.description }}</p>
-        <p v-if="activeTask" class="remaining">{{ remaining }} sec remaining</p>
-        <p v-else class="muted">Great work! Restart to run it again.</p>
-      </div>
-
-      <div class="task-runner">
-        <div class="highlight-band" aria-hidden="true"></div>
+      <div class="task-runner" ref="taskRunner">
         <article
           v-for="(task, index) in circuit.tasks"
           :key="`${task.name}-${index}`"
@@ -54,7 +46,8 @@
           <header class="inline task-header">
             <div>
               <h3>{{ task.name }}</h3>
-              <p class="muted">{{ task.description || 'No description provided.' }}</p>
+              <p v-if="task.description" class="muted task-description">{{ task.description }}</p>
+              <p v-else class="muted task-description">No description provided.</p>
             </div>
             <div class="task-meta">
               <span class="badge">{{ task.duration }} sec</span>
@@ -64,6 +57,9 @@
               </button>
             </div>
           </header>
+          <div v-if="index === currentIndex && !completed" class="task-timer" aria-live="polite">
+            {{ formattedRemaining }}
+          </div>
         </article>
       </div>
     </section>
@@ -74,6 +70,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { RouterLink } from 'vue-router';
 import { getCircuit } from '../api';
+import { useCircuitTitle } from '../composables/useCircuitTitle';
 
 const props = defineProps({
   id: {
@@ -94,6 +91,8 @@ const completionSoundEnabled = ref(true);
 const audioContext = ref(null);
 const lastBeepSecond = ref(null);
 const taskRefs = ref([]);
+const taskRunner = ref(null);
+const { setCircuitContext, clearCircuitContext } = useCircuitTitle();
 
 const completed = computed(() => circuit.value && currentIndex.value >= circuit.value.tasks.length);
 
@@ -114,15 +113,32 @@ const highlightIndex = computed(() => {
   return currentIndex.value;
 });
 
+const formattedRemaining = computed(() => {
+  const total = Math.max(0, remaining.value || 0);
+  const minutes = String(Math.floor(total / 60)).padStart(2, '0');
+  const seconds = String(total % 60).padStart(2, '0');
+  return `${minutes}:${seconds}`;
+});
+
 async function loadCircuit() {
   loading.value = true;
   try {
     circuit.value = await getCircuit(props.id);
     taskRefs.value = [];
     resetTimer();
+    if (circuit.value?.name) {
+      const circuitId =
+        circuit.value?.id !== undefined && circuit.value?.id !== null
+          ? String(circuit.value.id)
+          : props.id;
+      setCircuitContext(circuit.value.name, circuitId);
+    } else {
+      clearCircuitContext();
+    }
   } catch (err) {
     circuit.value = null;
     console.error(err);
+    clearCircuitContext();
   } finally {
     loading.value = false;
   }
@@ -269,6 +285,8 @@ function tick() {
 function setTaskRef(el, index) {
   if (el) {
     taskRefs.value[index] = el;
+  } else {
+    delete taskRefs.value[index];
   }
 }
 
@@ -278,11 +296,25 @@ watch(
     if (index < 0) return;
     await nextTick();
     const el = taskRefs.value[index];
-    if (el?.scrollIntoView) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const container = taskRunner.value;
+    if (container && el) {
+      const paddingTop = parseFloat(getComputedStyle(container).paddingTop || '0');
+      const target = el.offsetTop - paddingTop;
+      container.scrollTo({ top: target, behavior: 'smooth' });
+    } else if (el?.scrollIntoView) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
     }
   },
   { immediate: true }
+);
+
+watch(
+  () => props.id,
+  (newId, oldId) => {
+    if (newId && newId !== oldId) {
+      loadCircuit();
+    }
+  }
 );
 
 onMounted(loadCircuit);
@@ -292,6 +324,7 @@ onBeforeUnmount(() => {
   if (audioContext.value && typeof audioContext.value.close === 'function') {
     audioContext.value.close();
   }
+  clearCircuitContext();
 });
 </script>
 
@@ -333,27 +366,6 @@ onBeforeUnmount(() => {
   height: 1.1rem;
 }
 
-.accent-card {
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(13, 148, 136, 0.1));
-  border: 1px solid rgba(124, 58, 237, 0.25);
-  border-radius: 1rem;
-  padding: 1.5rem;
-  display: grid;
-  gap: 0.5rem;
-}
-
-.accent-card h3 {
-  margin: 0;
-  font-size: 1.4rem;
-  color: #312e81;
-}
-
-.remaining {
-  margin: 0;
-  font-weight: 600;
-  color: #0f766e;
-}
-
 .task-runner {
   position: relative;
   max-height: 60vh;
@@ -361,32 +373,22 @@ onBeforeUnmount(() => {
   padding: 1rem 0.75rem;
   display: grid;
   gap: 1rem;
-}
-
-.highlight-band {
-  position: absolute;
-  top: 50%;
-  left: 0.75rem;
-  right: 0.75rem;
-  transform: translateY(-50%);
-  height: 160px;
-  border: 2px dashed rgba(124, 58, 237, 0.35);
-  background: rgba(124, 58, 237, 0.08);
-  border-radius: 1rem;
-  pointer-events: none;
-  z-index: 0;
+  scroll-behavior: smooth;
 }
 
 .run-task {
   position: relative;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
   z-index: 1;
+  scroll-margin-top: 0.75rem;
 }
 
 .run-task.active {
-  border-color: rgba(124, 58, 237, 0.6);
-  box-shadow: 0 16px 30px -24px rgba(124, 58, 237, 0.45);
-  transform: scale(1.02);
+  border-width: 3px;
+  border-color: rgba(124, 58, 237, 0.7);
+  box-shadow: 0 20px 32px -20px rgba(124, 58, 237, 0.5);
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(13, 148, 136, 0.12));
 }
 
 .run-task.completed {
@@ -405,16 +407,32 @@ onBeforeUnmount(() => {
 .task-header h3 {
   margin: 0 0 0.35rem;
   color: #1f2937;
+  font-size: 1.15rem;
+  transition: font-size 0.2s ease;
 }
 
 .task-header .muted {
   margin: 0;
+  transition: font-size 0.2s ease;
+}
+
+.run-task.active .task-header h3 {
+  font-size: 1.7rem;
+}
+
+.run-task.active .task-header .muted,
+.run-task.active .task-description {
+  font-size: 1.1rem;
 }
 
 .task-meta {
   display: grid;
   justify-items: end;
   gap: 0.5rem;
+}
+
+.task-description {
+  margin: 0;
 }
 
 .task-play {
@@ -439,6 +457,14 @@ onBeforeUnmount(() => {
 
 .task-play span[aria-hidden='true'] {
   font-size: 1rem;
+}
+
+.task-timer {
+  margin-top: 1.5rem;
+  font-size: clamp(2.75rem, 6vw, 4rem);
+  font-weight: 700;
+  color: #312e81;
+  text-align: right;
 }
 
 .sr-only {

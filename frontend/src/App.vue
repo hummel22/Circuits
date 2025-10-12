@@ -8,6 +8,14 @@
       <nav class="app-nav">
         <RouterLink to="/">Circuits</RouterLink>
         <RouterLink to="/circuits/new" class="primary">Create Circuit</RouterLink>
+        <RouterLink
+          v-if="showCircuitLink"
+          :to="circuitLinkTarget"
+          class="circuit-pill"
+        >
+          <span class="pill-label" :title="circuitNavTitle">{{ circuitNavTitle }}</span>
+        </RouterLink>
+        <span v-else-if="showCircuitPlaceholder" class="circuit-pill pill-placeholder">Loading…</span>
       </nav>
     </header>
     <main class="app-main">
@@ -19,7 +27,39 @@
 </template>
 
 <script setup>
-import { RouterLink, RouterView } from 'vue-router';
+import { computed } from 'vue';
+import { RouterLink, RouterView, useRoute } from 'vue-router';
+import { useCircuitTitle } from './composables/useCircuitTitle';
+
+const route = useRoute();
+const { currentCircuitTitle, currentCircuitId } = useCircuitTitle();
+
+const isCircuitContext = computed(() =>
+  route.name === 'circuit-detail' || route.name === 'circuit-run'
+);
+
+const circuitNavTitle = computed(() => currentCircuitTitle.value);
+
+const showCircuitLink = computed(
+  () => isCircuitContext.value && Boolean(currentCircuitTitle.value)
+);
+
+const showCircuitPlaceholder = computed(
+  () =>
+    isCircuitContext.value &&
+    !currentCircuitTitle.value &&
+    typeof route.params.id === 'string'
+);
+
+const circuitLinkTarget = computed(() => {
+  if (!isCircuitContext.value || !currentCircuitId.value) {
+    return { name: 'circuits' };
+  }
+  if (route.name === 'circuit-run') {
+    return { name: 'circuit-run', params: { id: currentCircuitId.value } };
+  }
+  return { name: 'circuit-detail', params: { id: currentCircuitId.value } };
+});
 </script>
 
 <style scoped>
@@ -67,7 +107,7 @@ import { RouterLink, RouterView } from 'vue-router';
   font-size: 0.95rem;
 }
 
-.app-nav {
+.app-nav { 
   display: flex;
   gap: 0.75rem;
   align-items: center;
@@ -97,6 +137,39 @@ import { RouterLink, RouterView } from 'vue-router';
   background: linear-gradient(135deg, #7c3aed, #0d9488);
   color: #ffffff;
   box-shadow: 0 12px 24px -18px rgba(124, 58, 237, 0.65);
+}
+
+.app-nav .circuit-pill {
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 0.45rem 1.15rem;
+  font-weight: 600;
+  color: #312e81;
+  background: rgba(124, 58, 237, 0.15);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.app-nav .circuit-pill .pill-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-nav .circuit-pill:hover {
+  text-decoration: none;
+  background: rgba(124, 58, 237, 0.22);
+  border-color: rgba(124, 58, 237, 0.45);
+}
+
+.app-nav .pill-placeholder {
+  cursor: default;
+  color: rgba(49, 46, 129, 0.65);
+  background: rgba(124, 58, 237, 0.1);
+  border-style: dashed;
 }
 
 .app-main {
