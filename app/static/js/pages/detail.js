@@ -113,8 +113,8 @@ export default {
           <p class="text-600 mb-0">{{ circuit.description || 'No description provided.' }}</p>
         </div>
         <div class="flex gap-2 flex-wrap">
-          <Button label="Run" icon="pi pi-play" @click="goTo(`/circuits/${circuit.id}/run`)" />
-          <Button label="Edit" icon="pi pi-pencil" class="p-button-outlined" @click="goTo(`/circuits/${circuit.id}/edit`)" />
+          <Button label="Run" icon="pi pi-play" @click="goTo('/circuits/' + circuit.id + '/run')" />
+          <Button label="Edit" icon="pi pi-pencil" class="p-button-outlined" @click="goTo('/circuits/' + circuit.id + '/edit')" />
           <Button label="Delete" icon="pi pi-trash" class="p-button-text p-button-danger" @click="deleteCircuit" />
         </div>
       </div>

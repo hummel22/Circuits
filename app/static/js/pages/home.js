@@ -314,13 +314,13 @@ export default {
                 label="Run"
                 icon="pi pi-play"
                 class="p-button-sm p-button-rounded p-button-text"
-                @click="navigate(`/circuits/${slotProps.data.id}/run`)"
+                @click="navigate('/circuits/' + slotProps.data.id + '/run')"
               />
               <Button
                 label="Open"
                 icon="pi pi-external-link"
                 class="p-button-sm"
-                @click="navigate(`/circuits/${slotProps.data.id}`)"
+                @click="navigate('/circuits/' + slotProps.data.id)"
               />
             </div>
           </template>
