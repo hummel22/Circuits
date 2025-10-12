@@ -123,8 +123,14 @@ export default {
       </div>
 
       <div class="flex gap-2 flex-wrap mb-3">
-        <Chip icon="pi pi-clone" :label="circuit.tasks.length + ' steps'" />
-        <Chip icon="pi pi-clock" :label="formatSeconds(totalDuration)" />
+        <span class="stat-pill">
+          <i class="pi pi-clone" aria-hidden="true"></i>
+          <span>{{ circuit.tasks.length }} steps</span>
+        </span>
+        <span class="stat-pill">
+          <i class="pi pi-clock" aria-hidden="true"></i>
+          <span>{{ formatSeconds(totalDuration) }}</span>
+        </span>
       </div>
 
       <DataTable :value="circuit.tasks" responsiveLayout="stack" dataKey="name" class="shadow-2 border-round">

@@ -271,9 +271,18 @@ export default {
           <p class="text-600 m-0">Organize JSON definitions, upload files, and launch timers in one place.</p>
         </div>
         <div class="flex gap-2 flex-wrap">
-          <Chip icon="pi pi-list" :label="stats.totalCircuits + ' circuits'" />
-          <Chip icon="pi pi-clone" :label="stats.totalSteps + ' tasks'" />
-          <Chip icon="pi pi-clock" :label="formatSeconds(stats.totalSeconds)" />
+          <span class="stat-pill">
+            <i class="pi pi-list" aria-hidden="true"></i>
+            <span>{{ stats.totalCircuits }} circuits</span>
+          </span>
+          <span class="stat-pill">
+            <i class="pi pi-clone" aria-hidden="true"></i>
+            <span>{{ stats.totalSteps }} tasks</span>
+          </span>
+          <span class="stat-pill">
+            <i class="pi pi-clock" aria-hidden="true"></i>
+            <span>{{ formatSeconds(stats.totalSeconds) }}</span>
+          </span>
         </div>
       </div>
 
@@ -305,7 +314,7 @@ export default {
         </Column>
         <Column header="Tasks" class="w-6rem text-center">
           <template #body="slotProps">
-            <Tag :value="slotProps.data.tasks.length" severity="info" />
+            <span class="status-badge">{{ slotProps.data.tasks.length }}</span>
           </template>
         </Column>
         <Column header="Duration" class="w-8rem text-center">

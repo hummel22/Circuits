@@ -10,14 +10,11 @@ import {
 } from "vue";
 import PrimeVue from "primevue/config";
 import Button from "primevue/button";
-import Card from "primevue/card";
 import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Textarea from "primevue/textarea";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
-import Toolbar from "primevue/toolbar";
-import Tag from "primevue/tag";
 import Toast from "primevue/toast";
 import ConfirmDialog from "primevue/confirmdialog";
 import ToastService from "primevue/toastservice";
@@ -28,20 +25,16 @@ import Divider from "primevue/divider";
 import Checkbox from "primevue/checkbox";
 import Dropdown from "primevue/dropdown";
 import ProgressBar from "primevue/progressbar";
-import Chip from "primevue/chip";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 
 const registerComponents = (app) => {
   app.component("Button", Button);
-  app.component("Card", Card);
   app.component("Dialog", Dialog);
   app.component("InputText", InputText);
   app.component("Textarea", Textarea);
   app.component("DataTable", DataTable);
   app.component("Column", Column);
-  app.component("Toolbar", Toolbar);
-  app.component("Tag", Tag);
   app.component("Toast", Toast);
   app.component("ConfirmDialog", ConfirmDialog);
   app.component("InputNumber", InputNumber);
@@ -49,7 +42,6 @@ const registerComponents = (app) => {
   app.component("Checkbox", Checkbox);
   app.component("Dropdown", Dropdown);
   app.component("ProgressBar", ProgressBar);
-  app.component("Chip", Chip);
 };
 
 export {
