@@ -1,4 +1,4 @@
-const CACHE_NAME = "circuits-cache-v2";
+const CACHE_NAME = "circuits-cache-v3";
 const OFFLINE_URLS = [
   "/",
   "/static/css/style.css",
