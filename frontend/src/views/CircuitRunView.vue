@@ -6,7 +6,7 @@
     <section class="card" v-else-if="!circuit">
       <div class="empty-state">Circuit not found.</div>
     </section>
-    <section class="card" v-else>
+    <section class="card run-shell" v-else>
       <header class="inline" style="justify-content: space-between; align-items: center;">
         <div>
           <h2 class="section-title" style="margin: 0;">{{ circuit.name }}</h2>
@@ -14,41 +14,64 @@
         </div>
         <RouterLink :to="`/circuits/${circuit.id}`" class="ghost">Back to edit</RouterLink>
       </header>
-      <div class="stack">
-        <div class="card" style="background: rgba(37, 99, 235, 0.2); border-color: rgba(37,99,235,0.4);">
-          <h3 style="margin-top: 0;">{{ activeTask ? activeTask.name : 'Circuit complete!' }}</h3>
-          <p v-if="activeTask" style="margin-bottom: 0.5rem;">{{ activeTask.description }}</p>
-          <p v-if="activeTask" class="badge">{{ remaining }} sec remaining</p>
-          <div class="inline" style="margin-top: 1rem;">
-            <button v-if="!running && !completed" class="primary" @click="start">Start</button>
-            <button v-if="running" class="ghost" @click="pause">Pause</button>
-            <button v-if="!running && !completed && hasStarted" class="ghost" @click="resume">Resume</button>
-            <button v-if="running || hasStarted" class="ghost" @click="next">Skip</button>
-            <button v-if="completed" class="primary" @click="restart">Restart</button>
-          </div>
-        </div>
 
-        <div class="stack">
-          <article
-            v-for="(task, index) in circuit.tasks"
-            :key="`${task.name}-${index}`"
-            class="task-card"
-            :class="{ active: index === currentIndex, completed: index < currentIndex }"
-          >
-            <header class="inline" style="justify-content: space-between; align-items: baseline;">
-              <h3 style="margin: 0;">{{ task.name }}</h3>
-              <span class="badge">{{ task.duration }} sec</span>
-            </header>
-            <p style="margin-bottom: 0;">{{ task.description }}</p>
-          </article>
+      <div class="run-toolbar">
+        <div class="inline button-group">
+          <button v-if="!running && !completed" class="primary" @click="start">Start</button>
+          <button v-if="running" class="ghost" @click="pause">Pause</button>
+          <button v-if="!running && !completed && hasStarted" class="ghost" @click="resume">Resume</button>
+          <button v-if="running || hasStarted" class="ghost" @click="next">Skip</button>
+          <button v-if="completed" class="primary" @click="restart">Restart</button>
         </div>
+        <div class="sound-toggles">
+          <label class="toggle">
+            <input type="checkbox" v-model="countdownSoundEnabled" />
+            <span>Countdown beeps</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" v-model="completionSoundEnabled" />
+            <span>Completion chime</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="accent-card">
+        <h3>{{ activeTask ? activeTask.name : 'Circuit complete!' }}</h3>
+        <p v-if="activeTask" class="muted">{{ activeTask.description }}</p>
+        <p v-if="activeTask" class="remaining">{{ remaining }} sec remaining</p>
+        <p v-else class="muted">Great work! Restart to run it again.</p>
+      </div>
+
+      <div class="task-runner">
+        <div class="highlight-band" aria-hidden="true"></div>
+        <article
+          v-for="(task, index) in circuit.tasks"
+          :key="`${task.name}-${index}`"
+          class="task-card run-task"
+          :class="{ active: index === highlightIndex, completed: index < currentIndex }"
+          :ref="(el) => setTaskRef(el, index)"
+        >
+          <header class="inline task-header">
+            <div>
+              <h3>{{ task.name }}</h3>
+              <p class="muted">{{ task.description || 'No description provided.' }}</p>
+            </div>
+            <div class="task-meta">
+              <span class="badge">{{ task.duration }} sec</span>
+              <button type="button" class="task-play" @click="startFrom(index)">
+                <span aria-hidden="true">▶</span>
+                <span class="sr-only">Start from {{ task.name }}</span>
+              </button>
+            </div>
+          </header>
+        </article>
       </div>
     </section>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { RouterLink } from 'vue-router';
 import { getCircuit } from '../api';
 
@@ -66,6 +89,11 @@ const remaining = ref(0);
 const timer = ref(null);
 const running = ref(false);
 const hasStarted = ref(false);
+const countdownSoundEnabled = ref(true);
+const completionSoundEnabled = ref(true);
+const audioContext = ref(null);
+const lastBeepSecond = ref(null);
+const taskRefs = ref([]);
 
 const completed = computed(() => circuit.value && currentIndex.value >= circuit.value.tasks.length);
 
@@ -76,10 +104,21 @@ const activeTask = computed(() => {
   return circuit.value.tasks[currentIndex.value];
 });
 
+const highlightIndex = computed(() => {
+  if (!circuit.value || !circuit.value.tasks?.length) {
+    return -1;
+  }
+  if (completed.value) {
+    return Math.max(0, currentIndex.value - 1);
+  }
+  return currentIndex.value;
+});
+
 async function loadCircuit() {
   loading.value = true;
   try {
     circuit.value = await getCircuit(props.id);
+    taskRefs.value = [];
     resetTimer();
   } catch (err) {
     circuit.value = null;
@@ -89,82 +128,328 @@ async function loadCircuit() {
   }
 }
 
+function clearTimer() {
+  if (timer.value) {
+    clearInterval(timer.value);
+    timer.value = null;
+  }
+}
+
+function startTimer() {
+  clearTimer();
+  timer.value = setInterval(tick, 1000);
+}
+
+function ensureAudioContext() {
+  if (typeof window === 'undefined') return null;
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtor) {
+    return null;
+  }
+  if (!audioContext.value) {
+    audioContext.value = new AudioCtor();
+  }
+  if (audioContext.value.state === 'suspended') {
+    audioContext.value.resume();
+  }
+  return audioContext.value;
+}
+
+function playTone(frequency, duration, volume = 0.22) {
+  const ctx = ensureAudioContext();
+  if (!ctx) return;
+  const oscillator = ctx.createOscillator();
+  const gainNode = ctx.createGain();
+  oscillator.type = 'sine';
+  oscillator.frequency.value = frequency;
+  gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+  oscillator.connect(gainNode).connect(ctx.destination);
+  oscillator.start();
+  oscillator.stop(ctx.currentTime + duration);
+}
+
+function playCompletionSound(final = false) {
+  if (!completionSoundEnabled.value) return;
+  const baseVolume = final ? 0.32 : 0.26;
+  playTone(final ? 600 : 540, 0.18, baseVolume);
+  setTimeout(() => playTone(final ? 880 : 760, 0.28, baseVolume + 0.06), 120);
+}
+
+function maybePlayCountdown(nextRemaining) {
+  if (!countdownSoundEnabled.value) return;
+  if (nextRemaining < 1 || nextRemaining > 5) return;
+  if (lastBeepSecond.value === nextRemaining) return;
+  lastBeepSecond.value = nextRemaining;
+  const frequency = 820 + (5 - nextRemaining) * 70;
+  playTone(frequency, 0.12, 0.22);
+}
+
 function resetTimer() {
+  clearTimer();
   currentIndex.value = 0;
   remaining.value = circuit.value?.tasks?.[0]?.duration ?? 0;
   running.value = false;
   hasStarted.value = false;
-  clearInterval(timer.value);
-  timer.value = null;
+  lastBeepSecond.value = null;
 }
 
 function start() {
   if (!activeTask.value) return;
+  ensureAudioContext();
   hasStarted.value = true;
   running.value = true;
-  clearInterval(timer.value);
-  tick();
-  timer.value = setInterval(tick, 1000);
+  lastBeepSecond.value = null;
+  startTimer();
 }
 
 function pause() {
   running.value = false;
-  clearInterval(timer.value);
-  timer.value = null;
+  clearTimer();
 }
 
 function resume() {
   if (completed.value) return;
+  ensureAudioContext();
   running.value = true;
-  clearInterval(timer.value);
-  timer.value = setInterval(tick, 1000);
+  startTimer();
+}
+
+function startFrom(index) {
+  if (!circuit.value) return;
+  if (index < 0 || index >= circuit.value.tasks.length) return;
+  ensureAudioContext();
+  clearTimer();
+  currentIndex.value = index;
+  remaining.value = circuit.value.tasks[index].duration;
+  hasStarted.value = true;
+  running.value = true;
+  lastBeepSecond.value = null;
+  startTimer();
 }
 
 function next() {
-  advance();
-  if (running.value) {
-    clearInterval(timer.value);
-    timer.value = setInterval(tick, 1000);
-  }
+  advance(false);
 }
 
 function restart() {
   resetTimer();
 }
 
-function advance() {
-  currentIndex.value += 1;
-  if (completed.value) {
-    pause();
-    remaining.value = 0;
-    return;
+function advance(triggeredByTimer = false) {
+  if (!circuit.value) return;
+  const tasks = circuit.value.tasks;
+  const nextIndex = currentIndex.value + 1;
+  const willComplete = nextIndex >= tasks.length;
+  if (triggeredByTimer) {
+    playCompletionSound(willComplete);
   }
-  remaining.value = circuit.value.tasks[currentIndex.value].duration;
+  currentIndex.value = nextIndex;
+  lastBeepSecond.value = null;
+  if (willComplete) {
+    clearTimer();
+    running.value = false;
+    remaining.value = 0;
+  } else {
+    remaining.value = tasks[nextIndex].duration;
+  }
 }
 
 function tick() {
   if (!running.value) return;
   if (remaining.value <= 1) {
-    advance();
-  } else {
-    remaining.value -= 1;
+    advance(true);
+    return;
+  }
+  const nextRemaining = remaining.value - 1;
+  maybePlayCountdown(nextRemaining);
+  remaining.value = nextRemaining;
+}
+
+function setTaskRef(el, index) {
+  if (el) {
+    taskRefs.value[index] = el;
   }
 }
+
+watch(
+  () => highlightIndex.value,
+  async (index) => {
+    if (index < 0) return;
+    await nextTick();
+    const el = taskRefs.value[index];
+    if (el?.scrollIntoView) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  },
+  { immediate: true }
+);
 
 onMounted(loadCircuit);
 
 onBeforeUnmount(() => {
-  clearInterval(timer.value);
+  clearTimer();
+  if (audioContext.value && typeof audioContext.value.close === 'function') {
+    audioContext.value.close();
+  }
 });
 </script>
 
 <style scoped>
-.task-card.active {
-  border-color: rgba(37, 99, 235, 0.6);
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.4);
+.run-shell {
+  display: grid;
+  gap: 1.75rem;
 }
 
-.task-card.completed {
-  opacity: 0.6;
+.run-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.button-group {
+  gap: 0.75rem;
+}
+
+.sound-toggles {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.toggle input[type='checkbox'] {
+  accent-color: #7c3aed;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.accent-card {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(13, 148, 136, 0.1));
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.accent-card h3 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: #312e81;
+}
+
+.remaining {
+  margin: 0;
+  font-weight: 600;
+  color: #0f766e;
+}
+
+.task-runner {
+  position: relative;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 1rem 0.75rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.highlight-band {
+  position: absolute;
+  top: 50%;
+  left: 0.75rem;
+  right: 0.75rem;
+  transform: translateY(-50%);
+  height: 160px;
+  border: 2px dashed rgba(124, 58, 237, 0.35);
+  background: rgba(124, 58, 237, 0.08);
+  border-radius: 1rem;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.run-task {
+  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  z-index: 1;
+}
+
+.run-task.active {
+  border-color: rgba(124, 58, 237, 0.6);
+  box-shadow: 0 16px 30px -24px rgba(124, 58, 237, 0.45);
+  transform: scale(1.02);
+}
+
+.run-task.completed {
+  opacity: 0.75;
+}
+
+.run-task.active.completed {
+  opacity: 1;
+}
+
+.task-header {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.task-header h3 {
+  margin: 0 0 0.35rem;
+  color: #1f2937;
+}
+
+.task-header .muted {
+  margin: 0;
+}
+
+.task-meta {
+  display: grid;
+  justify-items: end;
+  gap: 0.5rem;
+}
+
+.task-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  background: #ffffff;
+  color: #7c3aed;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.task-play:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px -16px rgba(124, 58, 237, 0.55);
+  background: rgba(124, 58, 237, 0.08);
+}
+
+.task-play span[aria-hidden='true'] {
+  font-size: 1rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 </style>

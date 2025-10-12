@@ -50,14 +50,14 @@ const totalDuration = computed(() => {
   inset: -1px;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(140deg, rgba(59, 130, 246, 0.2), transparent 60%);
+  background: linear-gradient(140deg, rgba(124, 58, 237, 0.25), rgba(13, 148, 136, 0.15));
   opacity: 0;
   transition: opacity 0.2s ease;
 }
 
 .circuit-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 24px 40px -34px rgba(37, 99, 235, 0.75);
+  box-shadow: 0 24px 40px -28px rgba(15, 118, 110, 0.35);
 }
 
 .circuit-card:hover::after {
@@ -74,10 +74,11 @@ const totalDuration = computed(() => {
 .card-header h2 {
   margin: 0;
   font-size: 1.5rem;
+  color: #1f2937;
 }
 
 .card-header .muted {
-  color: rgba(148, 163, 184, 0.85);
+  color: rgba(100, 116, 139, 0.95);
   margin-top: 0.5rem;
 }
 
@@ -85,7 +86,7 @@ const totalDuration = computed(() => {
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
   padding-top: 0.75rem;
 }
 </style>
