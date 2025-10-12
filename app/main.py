@@ -3,22 +3,20 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any, Dict
-from urllib.parse import quote_plus
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi import FastAPI, HTTPException, status
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
 from .database import get_session, init_db
 from .models import Circuit
 
 BASE_DIR = Path(__file__).resolve().parent
+SPA_INDEX = BASE_DIR / "static" / "index.html"
 
 app = FastAPI(title="Circuits", description="Create, edit, and run timeboxed circuits.")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
 def serialize_circuit_model(circuit: Circuit) -> Dict[str, Any]:
@@ -77,27 +75,6 @@ def on_startup() -> None:
     init_db()
 
 
-@app.middleware("http")
-async def add_request_state(request: Request, call_next):
-    response = await call_next(request)
-    return response
-
-
-@app.get("/", response_class=HTMLResponse)
-def read_index(request: Request):
-    with get_session() as session:
-        circuits = session.exec(select(Circuit).order_by(Circuit.created_at.desc())).all()
-    serialized = [serialize_circuit_model(circuit) for circuit in circuits]
-    error = request.query_params.get("error")
-    context = {
-        "request": request,
-        "circuits": serialized,
-        "error": error,
-        "form_payload": request.query_params.get("payload", ""),
-    }
-    return templates.TemplateResponse("index.html", context)
-
-
 def create_or_update_circuit(session: Session, circuit: Circuit | None, payload: Dict[str, Any]) -> Circuit:
     normalized = validate_circuit_payload(payload)
     tasks_json = json.dumps(normalized["tasks"], ensure_ascii=False)
@@ -117,46 +94,6 @@ def create_or_update_circuit(session: Session, circuit: Circuit | None, payload:
     return circuit
 
 
-@app.post("/circuits")
-def create_circuit(payload: str = Form(...)):
-    try:
-        data = json.loads(payload)
-    except json.JSONDecodeError as exc:
-        return RedirectResponse(
-            url=f"/?error={quote_plus(f'Invalid JSON: {exc}')}&payload={quote_plus(payload)}",
-            status_code=303,
-        )
-
-    with get_session() as session:
-        try:
-            circuit = create_or_update_circuit(session, None, data)
-        except ValueError as exc:
-            return RedirectResponse(
-                url=f"/?error={quote_plus(str(exc))}&payload={quote_plus(json.dumps(data))}",
-                status_code=303,
-            )
-    return RedirectResponse(url=f"/circuits/{circuit.id}", status_code=303)
-
-
-@app.post("/circuits/upload")
-async def upload_circuit(file: UploadFile = File(...)):
-    content = await file.read()
-    try:
-        data = json.loads(content)
-    except json.JSONDecodeError as exc:
-        return RedirectResponse(
-            url=f"/?error={quote_plus(f'Invalid JSON: {exc}')}",
-            status_code=303,
-        )
-
-    with get_session() as session:
-        try:
-            circuit = create_or_update_circuit(session, None, data)
-        except ValueError as exc:
-            return RedirectResponse(url=f"/?error={quote_plus(str(exc))}", status_code=303)
-    return RedirectResponse(url=f"/circuits/{circuit.id}", status_code=303)
-
-
 def get_circuit_or_404(circuit_id: int) -> Circuit:
     with get_session() as session:
         circuit = session.get(Circuit, circuit_id)
@@ -164,67 +101,6 @@ def get_circuit_or_404(circuit_id: int) -> Circuit:
             raise HTTPException(status_code=404, detail="Circuit not found")
         session.expunge(circuit)
         return circuit
-
-
-@app.get("/circuits/{circuit_id}", response_class=HTMLResponse)
-def view_circuit(request: Request, circuit_id: int):
-    circuit = get_circuit_or_404(circuit_id)
-    context = {
-        "request": request,
-        "circuit": serialize_circuit_model(circuit),
-    }
-    return templates.TemplateResponse("circuit_detail.html", context)
-
-
-@app.get("/circuits/{circuit_id}/edit", response_class=HTMLResponse)
-def edit_circuit(request: Request, circuit_id: int):
-    circuit = get_circuit_or_404(circuit_id)
-    context = {
-        "request": request,
-        "circuit": circuit,
-        "error": request.query_params.get("error"),
-    }
-    return templates.TemplateResponse("edit_circuit.html", context)
-
-
-@app.post("/circuits/{circuit_id}/edit")
-def update_circuit(circuit_id: int, payload: str = Form(...)):
-    try:
-        data = json.loads(payload)
-    except json.JSONDecodeError as exc:
-        return RedirectResponse(
-            url=f"/circuits/{circuit_id}/edit?error=Invalid+JSON:+{exc}", status_code=303
-        )
-
-    with get_session() as session:
-        circuit = session.get(Circuit, circuit_id)
-        if circuit is None:
-            raise HTTPException(status_code=404, detail="Circuit not found")
-        try:
-            create_or_update_circuit(session, circuit, data)
-        except ValueError as exc:
-            return RedirectResponse(
-                url=f"/circuits/{circuit_id}/edit?error={quote_plus(str(exc))}",
-                status_code=303,
-            )
-    return RedirectResponse(url=f"/circuits/{circuit_id}", status_code=303)
-
-
-@app.get("/circuits/{circuit_id}/run", response_class=HTMLResponse)
-def run_circuit(request: Request, circuit_id: int):
-    circuit = get_circuit_or_404(circuit_id)
-    data = {
-        "id": circuit.id,
-        "name": circuit.name,
-        "description": circuit.description,
-        "tasks": circuit.tasks(),
-    }
-    context = {
-        "request": request,
-        "circuit": circuit,
-        "circuit_data": data,
-    }
-    return templates.TemplateResponse("circuit_run.html", context)
 
 
 @app.get("/api/circuits/{circuit_id}")
@@ -274,7 +150,7 @@ def api_delete_circuit(circuit_id: int):
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@app.get("/circuit-schema")
+@app.get("/api/circuit-schema")
 def circuit_schema():
     schema = {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -338,6 +214,20 @@ def service_worker() -> FileResponse:
     return FileResponse(BASE_DIR / "static" / "js" / "service-worker.js")
 
 
-@app.get("/health")
+@app.get("/api/health")
 def healthcheck():
     return {"status": "ok"}
+
+
+@app.get("/", include_in_schema=False)
+def serve_spa_root() -> FileResponse:
+    return FileResponse(SPA_INDEX)
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_spa(full_path: str):
+    if full_path.startswith("api/") or full_path.startswith("static/"):
+        raise HTTPException(status_code=404, detail="Not found")
+    if full_path in {"manifest.json", "service-worker.js"}:
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(SPA_INDEX)
