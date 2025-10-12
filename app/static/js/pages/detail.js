@@ -80,7 +80,7 @@ export default {
             await http.request(`/api/circuits/${circuit.value.id}`, { method: "DELETE" });
             toast.add({ severity: "info", summary: "Deleted", detail: "Circuit removed", life: 2000 });
             setTimeout(() => {
-              window.location.href = "/";
+              window.location.assign("/");
             }, 400);
           } catch (error) {
             toast.add({ severity: "error", summary: "Error", detail: error.message || "Unable to delete", life: 3000 });
@@ -90,7 +90,10 @@ export default {
     };
 
     const goTo = (path) => {
-      window.location.href = path;
+      if (!path) {
+        return;
+      }
+      window.location.assign(path);
     };
 
     return {

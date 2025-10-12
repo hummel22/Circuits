@@ -7,30 +7,30 @@ import {
   onMounted,
   onBeforeUnmount,
   nextTick,
-} from "https://unpkg.com/vue@3/dist/vue.esm-browser.js";
-import PrimeVue from "https://unpkg.com/primevue@3.52.0/config/config.esm.js";
-import Button from "https://unpkg.com/primevue@3.52.0/button/button.esm.js";
-import Card from "https://unpkg.com/primevue@3.52.0/card/card.esm.js";
-import Dialog from "https://unpkg.com/primevue@3.52.0/dialog/dialog.esm.js";
-import InputText from "https://unpkg.com/primevue@3.52.0/inputtext/inputtext.esm.js";
-import Textarea from "https://unpkg.com/primevue@3.52.0/textarea/textarea.esm.js";
-import DataTable from "https://unpkg.com/primevue@3.52.0/datatable/datatable.esm.js";
-import Column from "https://unpkg.com/primevue@3.52.0/column/column.esm.js";
-import Toolbar from "https://unpkg.com/primevue@3.52.0/toolbar/toolbar.esm.js";
-import Tag from "https://unpkg.com/primevue@3.52.0/tag/tag.esm.js";
-import Toast from "https://unpkg.com/primevue@3.52.0/toast/toast.esm.js";
-import ConfirmDialog from "https://unpkg.com/primevue@3.52.0/confirmdialog/confirmdialog.esm.js";
-import ToastService from "https://unpkg.com/primevue@3.52.0/toastservice/toastservice.esm.js";
-import ConfirmationService from "https://unpkg.com/primevue@3.52.0/confirmationservice/confirmationservice.esm.js";
-import Ripple from "https://unpkg.com/primevue@3.52.0/ripple/ripple.esm.js";
-import InputNumber from "https://unpkg.com/primevue@3.52.0/inputnumber/inputnumber.esm.js";
-import Divider from "https://unpkg.com/primevue@3.52.0/divider/divider.esm.js";
-import Checkbox from "https://unpkg.com/primevue@3.52.0/checkbox/checkbox.esm.js";
-import Dropdown from "https://unpkg.com/primevue@3.52.0/dropdown/dropdown.esm.js";
-import ProgressBar from "https://unpkg.com/primevue@3.52.0/progressbar/progressbar.esm.js";
-import Chip from "https://unpkg.com/primevue@3.52.0/chip/chip.esm.js";
-import { useToast } from "https://unpkg.com/primevue@3.52.0/usetoast/usetoast.esm.js";
-import { useConfirm } from "https://unpkg.com/primevue@3.52.0/useconfirm/useconfirm.esm.js";
+} from "vue";
+import PrimeVue from "primevue/config";
+import Button from "primevue/button";
+import Card from "primevue/card";
+import Dialog from "primevue/dialog";
+import InputText from "primevue/inputtext";
+import Textarea from "primevue/textarea";
+import DataTable from "primevue/datatable";
+import Column from "primevue/column";
+import Toolbar from "primevue/toolbar";
+import Tag from "primevue/tag";
+import Toast from "primevue/toast";
+import ConfirmDialog from "primevue/confirmdialog";
+import ToastService from "primevue/toastservice";
+import ConfirmationService from "primevue/confirmationservice";
+import Ripple from "primevue/ripple";
+import InputNumber from "primevue/inputnumber";
+import Divider from "primevue/divider";
+import Checkbox from "primevue/checkbox";
+import Dropdown from "primevue/dropdown";
+import ProgressBar from "primevue/progressbar";
+import Chip from "primevue/chip";
+import { useToast } from "primevue/usetoast";
+import { useConfirm } from "primevue/useconfirm";
 
 const registerComponents = (app) => {
   app.component("Button", Button);

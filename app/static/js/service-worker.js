@@ -33,16 +33,35 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") {
+    return;
+  }
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch (error) {
+    return;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
+    caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
         return cachedResponse;
       }
-      return fetch(event.request).then((response) => {
-        const cloned = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
-        return response;
-      });
+      return fetch(request)
+        .then((response) => {
+          if (!response || response.status !== 200 || response.type !== "basic") {
+            return response;
+          }
+          const cloned = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+          return response;
+        })
+        .catch(() => cachedResponse || fetch("/"));
     })
   );
 });

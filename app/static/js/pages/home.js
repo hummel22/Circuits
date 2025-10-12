@@ -166,7 +166,10 @@ export default {
     };
 
     const navigate = (url) => {
-      window.location.href = url;
+      if (!url) {
+        return;
+      }
+      window.location.assign(url);
     };
 
     const onRowClick = (event) => {
@@ -288,7 +291,13 @@ export default {
             <div class="flex align-items-start gap-3">
               <span class="pi pi-bolt text-primary text-xl"></span>
               <div>
-                <div class="font-medium">{{ slotProps.data.name }}</div>
+                <a
+                  class="font-medium block text-color"
+                  :href="'/circuits/' + slotProps.data.id"
+                  @click.stop.prevent="navigate('/circuits/' + slotProps.data.id)"
+                >
+                  {{ slotProps.data.name }}
+                </a>
                 <small class="text-600">{{ slotProps.data.description }}</small>
               </div>
             </div>
