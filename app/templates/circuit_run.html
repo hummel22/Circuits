@@ -2,78 +2,20 @@
 
 {% block title %}Run • {{ circuit.name }}{% endblock %}
 
-{% block extra_head %}
-  <meta name="description" content="Run the {{ circuit.name }} circuit." />
-{% endblock %}
-
 {% block content %}
-  <div class="section">
-    <div class="card">
-      <div class="card-content">
-        <span class="card-title">{{ circuit.name }}</span>
-        <p class="grey-text text-darken-1">{{ circuit.description }}</p>
-        <div class="divider" style="margin: 16px 0;"></div>
-        <div class="timer-display center-align">
-          <h5 id="current-step-name">Ready</h5>
-          <h1 id="time-remaining" class="timer-value">00:00</h1>
-          <p id="next-step" class="grey-text text-lighten-1"></p>
-        </div>
-        <div class="row" style="margin-top: 24px;">
-          <div class="col s12 m6">
-            <label>Finish action</label>
-            <select id="finish-action" class="browser-default">
-              <option value="sound">Play a sound</option>
-              <option value="vibration">Vibrate</option>
-              <option value="both">Sound and vibrate</option>
-              <option value="none">Do nothing</option>
-            </select>
-          </div>
-          <div class="col s12 m6">
-            <p>
-              <label>
-                <input type="checkbox" id="countdown-sound" checked />
-                <span>5-second countdown sound</span>
-              </label>
-            </p>
-            <p>
-              <label>
-                <input type="checkbox" id="countdown-vibration" />
-                <span>5-second countdown vibration</span>
-              </label>
-            </p>
-          </div>
-        </div>
-        <div class="center-align" style="margin-top: 16px;">
-          <button id="start-button" class="btn-large blue darken-2 waves-effect waves-light">
-            <i class="material-icons left">play_arrow</i>
-            Start
-          </button>
-          <button id="pause-button" class="btn-large grey lighten-1 grey-text text-darken-4 waves-effect" disabled>
-            <i class="material-icons left">pause</i>
-            Pause
-          </button>
-          <button id="stop-button" class="btn-large red darken-1 waves-effect waves-light" disabled>
-            <i class="material-icons left">stop</i>
-            Stop
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="card">
-      <div class="card-content">
-        <span class="card-title">Upcoming steps</span>
-        <ul class="collection" id="upcoming-list"></ul>
-      </div>
-    </div>
-  </div>
+  <div id="app"></div>
+  <script id="page-props" type="application/json">
+    {{ {"circuit": circuit_data} | tojson }}
+  </script>
 {% endblock %}
 
 {% block scripts %}
-  <script>
-    const circuitData = {{ circuit_data | tojson }};
+  <script type="module">
+    import { bootstrapPrimeVueApp } from "/static/js/app.js";
+    import CircuitRunPage from "/static/js/pages/run.js";
+
+    const propsElement = document.getElementById("page-props");
+    const props = propsElement ? JSON.parse(propsElement.textContent) : {};
+    bootstrapPrimeVueApp("#app", CircuitRunPage, props);
   </script>
-  <script src="/static/js/run.js" defer></script>
 {% endblock %}

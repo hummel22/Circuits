@@ -3,52 +3,19 @@
 {% block title %}Circuit • {{ circuit.name }}{% endblock %}
 
 {% block content %}
-  <div class="section">
-    <div class="card">
-      <div class="card-content">
-        <div class="right">
-          <a href="/circuits/{{ circuit.id }}/edit" class="btn-flat waves-effect" title="Edit">
-            <i class="material-icons">settings</i>
-          </a>
-        </div>
-        <span class="card-title">{{ circuit.name }}</span>
-        <p class="grey-text text-darken-2">{{ circuit.description }}</p>
-        <p class="grey-text">Created {{ circuit.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</p>
-      </div>
-      <div class="card-action">
-        <a href="/circuits/{{ circuit.id }}/run" class="btn blue darken-2 waves-effect waves-light">
-          <i class="material-icons left">play_arrow</i>
-          Run Circuit
-        </a>
-      </div>
-    </div>
-  </div>
+  <div id="app"></div>
+  <script id="page-props" type="application/json">
+    {{ {"circuit": circuit} | tojson }}
+  </script>
+{% endblock %}
 
-  <div class="section">
-    <div class="card">
-      <div class="card-content">
-        <span class="card-title">Steps</span>
-        <table class="striped responsive-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Name</th>
-              <th>Description</th>
-              <th>Duration (s)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for step in circuit.tasks %}
-              <tr>
-                <td>{{ loop.index }}</td>
-                <td>{{ step.name }}</td>
-                <td>{{ step.description }}</td>
-                <td>{{ step.duration }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+{% block scripts %}
+  <script type="module">
+    import { bootstrapPrimeVueApp } from "/static/js/app.js";
+    import CircuitDetailPage from "/static/js/pages/detail.js";
+
+    const propsElement = document.getElementById("page-props");
+    const props = propsElement ? JSON.parse(propsElement.textContent) : {};
+    bootstrapPrimeVueApp("#app", CircuitDetailPage, props);
+  </script>
 {% endblock %}

@@ -1,12 +1,12 @@
 # Circuits
 
-Circuits is a self-contained web application that lets you create, store, edit, and run training circuits backed by a local SQLite database. Both the Material Design-inspired user interface and the JSON API are served from the same FastAPI service, making it easy to run locally or inside a container.
+Circuits is a self-contained web application that lets you create, store, edit, and run training circuits backed by a local SQLite database. The PrimeVue-powered Material Design interface and the JSON API are served from the same FastAPI service, making it easy to run locally or inside a container.
 
 ## Features
 
 - 📚 **Circuit library** – Store as many named circuits as you like. Each circuit contains an ordered list of tasks with names, descriptions, and durations in seconds.
-- 📤 **Flexible imports** – Paste JSON into the builder or upload a JSON file to create a new circuit. Validation ensures the data fits the expected schema.
-- ⚙️ **In-place editing** – Every circuit page includes a settings icon that opens a JSON editor for quick adjustments.
+- 📤 **Flexible imports** – Paste JSON into the builder or upload a JSON file directly in the browser dialog. Validation ensures the data fits the expected schema.
+- 🛠️ **Visual editor** – Use the PrimeVue builder to add, remove, and reorder steps with duration controls—no raw JSON editing required.
 - 📄 **JSON schema export** – Visit `/circuit-schema` to retrieve a JSON Schema plus an example payload (perfect for AI assistants).
 - ⏱️ **Guided runner** – Start a circuit to see the active task, remaining time, and the upcoming task in muted text. Configure finish actions (sound, vibration, or both), toggle 5-second countdown alerts, and pause or stop the timer at any time.
 - 💾 **Local persistence** – All data is stored in `circuits.db` using SQLite.

@@ -3,34 +3,27 @@
 {% block title %}Edit • {{ circuit.name }}{% endblock %}
 
 {% block content %}
-  <div class="section">
-    <div class="card">
-      <div class="card-content">
-        <span class="card-title">Edit Circuit</span>
-        <p class="grey-text text-darken-1">
-          Update the JSON structure below. It must follow the circuit schema.
-        </p>
-        {% if error %}
-          <p class="red-text">{{ error }}</p>
-        {% endif %}
-        <form action="/circuits/{{ circuit.id }}/edit" method="post">
-          <div class="input-field">
-            <textarea
-              id="payload"
-              name="payload"
-              class="materialize-textarea"
-              rows="20"
-              required
-            >{{ payload }}</textarea>
-            <label for="payload" class="active">Circuit JSON</label>
-          </div>
-          <button type="submit" class="btn blue darken-2 waves-effect waves-light">
-            <i class="material-icons left">save</i>
-            Save Changes
-          </button>
-          <a href="/circuits/{{ circuit.id }}" class="btn-flat waves-effect">Cancel</a>
-        </form>
-      </div>
-    </div>
-  </div>
+  <div id="app"></div>
+  <script id="page-props" type="application/json">
+    {{ {
+      "circuit": {
+        "id": circuit.id,
+        "name": circuit.name,
+        "description": circuit.description,
+        "tasks": circuit.tasks()
+      },
+      "error": error or ""
+    } | tojson }}
+  </script>
+{% endblock %}
+
+{% block scripts %}
+  <script type="module">
+    import { bootstrapPrimeVueApp } from "/static/js/app.js";
+    import CircuitEditorPage from "/static/js/pages/editor.js";
+
+    const propsElement = document.getElementById("page-props");
+    const props = propsElement ? JSON.parse(propsElement.textContent) : {};
+    bootstrapPrimeVueApp("#app", CircuitEditorPage, props);
+  </script>
 {% endblock %}

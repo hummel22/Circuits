@@ -3,83 +3,23 @@
 {% block title %}Circuits Library{% endblock %}
 
 {% block content %}
-  <div class="section">
-    <h4 class="blue-text text-darken-2">Your Circuits</h4>
-    {% if circuits %}
-      <div class="row">
-        {% for circuit in circuits %}
-          <div class="col s12 m6">
-            <div class="card hoverable">
-              <div class="card-content">
-                <span class="card-title">
-                  <i class="material-icons left">electric_bolt</i>
-                  {{ circuit.name }}
-                </span>
-                <p class="truncate">{{ circuit.description }}</p>
-                <p class="grey-text text-darken-1">{{ circuit.tasks|length }} steps</p>
-              </div>
-              <div class="card-action">
-                <a href="/circuits/{{ circuit.id }}" class="blue-text text-darken-2">Open</a>
-                <a href="/circuits/{{ circuit.id }}/run" class="blue-text text-darken-2">Run</a>
-              </div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <div class="card-panel amber lighten-5">
-        <span class="amber-text text-darken-3">No circuits yet. Use the form below to add one.</span>
-      </div>
-    {% endif %}
-  </div>
+  <div id="app"></div>
+  <script id="page-props" type="application/json">
+    {{ {
+      "circuits": circuits,
+      "error": error,
+      "payload": form_payload or ""
+    } | tojson }}
+  </script>
+{% endblock %}
 
-  <div class="section">
-    <div class="card">
-      <div class="card-content">
-        <span class="card-title">Create a circuit</span>
-        {% if error %}
-          <p class="red-text">{{ error }}</p>
-        {% endif %}
-        <form action="/circuits" method="post">
-          <div class="input-field">
-            <textarea
-              id="payload"
-              name="payload"
-              class="materialize-textarea"
-              placeholder='{"name": "Morning Routine", "description": "Start your day", "tasks": [{"name": "Stretch", "description": "Light warm up", "duration": 300}]}'
-              required
-            >{{ form_payload or '' }}</textarea>
-            <label for="payload">Circuit JSON</label>
-          </div>
-          <button type="submit" class="btn blue darken-2 waves-effect waves-light">
-            <i class="material-icons left">file_upload</i>
-            Save Circuit
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
+{% block scripts %}
+  <script type="module">
+    import { bootstrapPrimeVueApp } from "/static/js/app.js";
+    import HomePage from "/static/js/pages/home.js";
 
-  <div class="section">
-    <div class="card">
-      <div class="card-content">
-        <span class="card-title">Upload JSON file</span>
-        <form action="/circuits/upload" method="post" enctype="multipart/form-data">
-          <div class="file-field input-field">
-            <div class="btn blue darken-2">
-              <span>File</span>
-              <input type="file" name="file" accept="application/json" required />
-            </div>
-            <div class="file-path-wrapper">
-              <input class="file-path validate" type="text" placeholder="Upload your circuit JSON" />
-            </div>
-          </div>
-          <button type="submit" class="btn blue darken-2 waves-effect waves-light">
-            <i class="material-icons left">cloud_upload</i>
-            Upload Circuit
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
+    const propsElement = document.getElementById("page-props");
+    const props = propsElement ? JSON.parse(propsElement.textContent) : {};
+    bootstrapPrimeVueApp("#app", HomePage, props);
+  </script>
 {% endblock %}

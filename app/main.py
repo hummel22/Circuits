@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import quote_plus
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
@@ -19,6 +19,16 @@ BASE_DIR = Path(__file__).resolve().parent
 app = FastAPI(title="Circuits", description="Create, edit, and run timeboxed circuits.")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+
+def serialize_circuit_model(circuit: Circuit) -> Dict[str, Any]:
+    return {
+        "id": circuit.id,
+        "name": circuit.name,
+        "description": circuit.description,
+        "created_at": circuit.created_at.isoformat() if circuit.created_at else None,
+        "tasks": circuit.tasks(),
+    }
 
 
 def validate_circuit_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -77,16 +87,7 @@ async def add_request_state(request: Request, call_next):
 def read_index(request: Request):
     with get_session() as session:
         circuits = session.exec(select(Circuit).order_by(Circuit.created_at.desc())).all()
-    serialized = []
-    for circuit in circuits:
-        serialized.append(
-            {
-                "id": circuit.id,
-                "name": circuit.name,
-                "description": circuit.description,
-                "tasks": circuit.tasks(),
-            }
-        )
+    serialized = [serialize_circuit_model(circuit) for circuit in circuits]
     error = request.query_params.get("error")
     context = {
         "request": request,
@@ -168,16 +169,9 @@ def get_circuit_or_404(circuit_id: int) -> Circuit:
 @app.get("/circuits/{circuit_id}", response_class=HTMLResponse)
 def view_circuit(request: Request, circuit_id: int):
     circuit = get_circuit_or_404(circuit_id)
-    tasks = circuit.tasks()
     context = {
         "request": request,
-        "circuit": {
-            "id": circuit.id,
-            "name": circuit.name,
-            "description": circuit.description,
-            "created_at": circuit.created_at,
-            "tasks": tasks,
-        },
+        "circuit": serialize_circuit_model(circuit),
     }
     return templates.TemplateResponse("circuit_detail.html", context)
 
@@ -185,19 +179,9 @@ def view_circuit(request: Request, circuit_id: int):
 @app.get("/circuits/{circuit_id}/edit", response_class=HTMLResponse)
 def edit_circuit(request: Request, circuit_id: int):
     circuit = get_circuit_or_404(circuit_id)
-    payload = json.dumps(
-        {
-            "name": circuit.name,
-            "description": circuit.description,
-            "tasks": circuit.tasks(),
-        },
-        indent=2,
-        ensure_ascii=False,
-    )
     context = {
         "request": request,
         "circuit": circuit,
-        "payload": payload,
         "error": request.query_params.get("error"),
     }
     return templates.TemplateResponse("edit_circuit.html", context)
@@ -246,27 +230,48 @@ def run_circuit(request: Request, circuit_id: int):
 @app.get("/api/circuits/{circuit_id}")
 def circuit_api(circuit_id: int):
     circuit = get_circuit_or_404(circuit_id)
-    return {
-        "id": circuit.id,
-        "name": circuit.name,
-        "description": circuit.description,
-        "tasks": circuit.tasks(),
-    }
+    return serialize_circuit_model(circuit)
 
 
 @app.get("/api/circuits")
 def circuits_api():
     with get_session() as session:
-        circuits = session.exec(select(Circuit)).all()
-    return [
-        {
-            "id": circuit.id,
-            "name": circuit.name,
-            "description": circuit.description,
-            "tasks": circuit.tasks(),
-        }
-        for circuit in circuits
-    ]
+        circuits = session.exec(select(Circuit).order_by(Circuit.created_at.desc())).all()
+    return [serialize_circuit_model(circuit) for circuit in circuits]
+
+
+@app.post("/api/circuits", status_code=status.HTTP_201_CREATED)
+def api_create_circuit(payload: Dict[str, Any]):
+    with get_session() as session:
+        try:
+            circuit = create_or_update_circuit(session, None, payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return serialize_circuit_model(circuit)
+
+
+@app.put("/api/circuits/{circuit_id}")
+def api_update_circuit(circuit_id: int, payload: Dict[str, Any]):
+    with get_session() as session:
+        circuit = session.get(Circuit, circuit_id)
+        if circuit is None:
+            raise HTTPException(status_code=404, detail="Circuit not found")
+        try:
+            circuit = create_or_update_circuit(session, circuit, payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return serialize_circuit_model(circuit)
+
+
+@app.delete("/api/circuits/{circuit_id}", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_circuit(circuit_id: int):
+    with get_session() as session:
+        circuit = session.get(Circuit, circuit_id)
+        if circuit is None:
+            raise HTTPException(status_code=404, detail="Circuit not found")
+        session.delete(circuit)
+        session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.get("/circuit-schema")

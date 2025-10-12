@@ -1,9 +1,14 @@
-const CACHE_NAME = "circuits-cache-v1";
+const CACHE_NAME = "circuits-cache-v2";
 const OFFLINE_URLS = [
   "/",
   "/static/css/style.css",
-  "/static/js/run.js",
   "/static/js/pwa.js",
+  "/static/js/app.js",
+  "/static/js/components/task-editor.js",
+  "/static/js/pages/home.js",
+  "/static/js/pages/detail.js",
+  "/static/js/pages/editor.js",
+  "/static/js/pages/run.js",
   "/manifest.json"
 ];
 
