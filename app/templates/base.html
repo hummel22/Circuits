@@ -21,48 +21,49 @@
     <link
       rel="stylesheet"
       href="https://unpkg.com/primevue@3.52.0/resources/primevue.min.css"
+      crossorigin="anonymous"
     />
-    <link rel="stylesheet" href="https://unpkg.com/primeflex@3.3.1/primeflex.min.css" />
-    <link rel="stylesheet" href="https://unpkg.com/primeicons@6.0.1/primeicons.css" />
+    <link rel="stylesheet" href="https://unpkg.com/primeflex@3.3.1/primeflex.min.css" crossorigin="anonymous" />
+    <link rel="stylesheet" href="https://unpkg.com/primeicons@6.0.1/primeicons.css" crossorigin="anonymous" />
     <link rel="stylesheet" href="/static/css/style.css" />
     <script type="importmap">
       {
         "imports": {
           "vue": "https://unpkg.com/vue@3/dist/vue.esm-browser.js",
-          "primevue/config": "https://unpkg.com/primevue@3.52.0/config/config.esm.js",
-          "primevue/api": "https://unpkg.com/primevue@3.52.0/api/api.esm.js",
-          "primevue/basecomponent": "https://unpkg.com/primevue@3.52.0/basecomponent/basecomponent.esm.js",
-          "primevue/hooks": "https://unpkg.com/primevue@3.52.0/hooks/hooks.esm.js",
-          "primevue/utils": "https://unpkg.com/primevue@3.52.0/utils/utils.esm.js",
-          "primevue/tooltip": "https://unpkg.com/primevue@3.52.0/tooltip/tooltip.esm.js",
-          "primevue/portal": "https://unpkg.com/primevue@3.52.0/portal/portal.esm.js",
-          "primevue/overlayservice": "https://unpkg.com/primevue@3.52.0/overlayservice/overlayservice.esm.js",
-          "primevue/focustrap": "https://unpkg.com/primevue@3.52.0/focustrap/focustrap.esm.js",
-          "primevue/virtualscroller": "https://unpkg.com/primevue@3.52.0/virtualscroller/virtualscroller.esm.js",
-          "primevue/paginator": "https://unpkg.com/primevue@3.52.0/paginator/paginator.esm.js",
-          "primevue/shared": "https://unpkg.com/primevue@3.52.0/shared/shared.esm.js",
-          "primevue/ripple": "https://unpkg.com/primevue@3.52.0/ripple/ripple.esm.js",
-          "primevue/button": "https://unpkg.com/primevue@3.52.0/button/button.esm.js",
-          "primevue/card": "https://unpkg.com/primevue@3.52.0/card/card.esm.js",
-          "primevue/dialog": "https://unpkg.com/primevue@3.52.0/dialog/dialog.esm.js",
-          "primevue/inputtext": "https://unpkg.com/primevue@3.52.0/inputtext/inputtext.esm.js",
-          "primevue/textarea": "https://unpkg.com/primevue@3.52.0/textarea/textarea.esm.js",
-          "primevue/datatable": "https://unpkg.com/primevue@3.52.0/datatable/datatable.esm.js",
-          "primevue/column": "https://unpkg.com/primevue@3.52.0/column/column.esm.js",
-          "primevue/toolbar": "https://unpkg.com/primevue@3.52.0/toolbar/toolbar.esm.js",
-          "primevue/tag": "https://unpkg.com/primevue@3.52.0/tag/tag.esm.js",
-          "primevue/toast": "https://unpkg.com/primevue@3.52.0/toast/toast.esm.js",
-          "primevue/confirmdialog": "https://unpkg.com/primevue@3.52.0/confirmdialog/confirmdialog.esm.js",
-          "primevue/toastservice": "https://unpkg.com/primevue@3.52.0/toastservice/toastservice.esm.js",
-          "primevue/confirmationservice": "https://unpkg.com/primevue@3.52.0/confirmationservice/confirmationservice.esm.js",
-          "primevue/inputnumber": "https://unpkg.com/primevue@3.52.0/inputnumber/inputnumber.esm.js",
-          "primevue/divider": "https://unpkg.com/primevue@3.52.0/divider/divider.esm.js",
-          "primevue/checkbox": "https://unpkg.com/primevue@3.52.0/checkbox/checkbox.esm.js",
-          "primevue/dropdown": "https://unpkg.com/primevue@3.52.0/dropdown/dropdown.esm.js",
-          "primevue/progressbar": "https://unpkg.com/primevue@3.52.0/progressbar/progressbar.esm.js",
-          "primevue/chip": "https://unpkg.com/primevue@3.52.0/chip/chip.esm.js",
-          "primevue/usetoast": "https://unpkg.com/primevue@3.52.0/usetoast/usetoast.esm.js",
-          "primevue/useconfirm": "https://unpkg.com/primevue@3.52.0/useconfirm/useconfirm.esm.js"
+          "primevue/config": "https://unpkg.com/primevue@3.52.0/config/config.esm.js?module",
+          "primevue/api": "https://unpkg.com/primevue@3.52.0/api/api.esm.js?module",
+          "primevue/basecomponent": "https://unpkg.com/primevue@3.52.0/basecomponent/basecomponent.esm.js?module",
+          "primevue/hooks": "https://unpkg.com/primevue@3.52.0/hooks/hooks.esm.js?module",
+          "primevue/utils": "https://unpkg.com/primevue@3.52.0/utils/utils.esm.js?module",
+          "primevue/tooltip": "https://unpkg.com/primevue@3.52.0/tooltip/tooltip.esm.js?module",
+          "primevue/portal": "https://unpkg.com/primevue@3.52.0/portal/portal.esm.js?module",
+          "primevue/overlayservice": "https://unpkg.com/primevue@3.52.0/overlayservice/overlayservice.esm.js?module",
+          "primevue/focustrap": "https://unpkg.com/primevue@3.52.0/focustrap/focustrap.esm.js?module",
+          "primevue/virtualscroller": "https://unpkg.com/primevue@3.52.0/virtualscroller/virtualscroller.esm.js?module",
+          "primevue/paginator": "https://unpkg.com/primevue@3.52.0/paginator/paginator.esm.js?module",
+          "primevue/shared": "https://unpkg.com/primevue@3.52.0/shared/shared.esm.js?module",
+          "primevue/ripple": "https://unpkg.com/primevue@3.52.0/ripple/ripple.esm.js?module",
+          "primevue/button": "https://unpkg.com/primevue@3.52.0/button/button.esm.js?module",
+          "primevue/card": "https://unpkg.com/primevue@3.52.0/card/card.esm.js?module",
+          "primevue/dialog": "https://unpkg.com/primevue@3.52.0/dialog/dialog.esm.js?module",
+          "primevue/inputtext": "https://unpkg.com/primevue@3.52.0/inputtext/inputtext.esm.js?module",
+          "primevue/textarea": "https://unpkg.com/primevue@3.52.0/textarea/textarea.esm.js?module",
+          "primevue/datatable": "https://unpkg.com/primevue@3.52.0/datatable/datatable.esm.js?module",
+          "primevue/column": "https://unpkg.com/primevue@3.52.0/column/column.esm.js?module",
+          "primevue/toolbar": "https://unpkg.com/primevue@3.52.0/toolbar/toolbar.esm.js?module",
+          "primevue/tag": "https://unpkg.com/primevue@3.52.0/tag/tag.esm.js?module",
+          "primevue/toast": "https://unpkg.com/primevue@3.52.0/toast/toast.esm.js?module",
+          "primevue/confirmdialog": "https://unpkg.com/primevue@3.52.0/confirmdialog/confirmdialog.esm.js?module",
+          "primevue/toastservice": "https://unpkg.com/primevue@3.52.0/toastservice/toastservice.esm.js?module",
+          "primevue/confirmationservice": "https://unpkg.com/primevue@3.52.0/confirmationservice/confirmationservice.esm.js?module",
+          "primevue/inputnumber": "https://unpkg.com/primevue@3.52.0/inputnumber/inputnumber.esm.js?module",
+          "primevue/divider": "https://unpkg.com/primevue@3.52.0/divider/divider.esm.js?module",
+          "primevue/checkbox": "https://unpkg.com/primevue@3.52.0/checkbox/checkbox.esm.js?module",
+          "primevue/dropdown": "https://unpkg.com/primevue@3.52.0/dropdown/dropdown.esm.js?module",
+          "primevue/progressbar": "https://unpkg.com/primevue@3.52.0/progressbar/progressbar.esm.js?module",
+          "primevue/chip": "https://unpkg.com/primevue@3.52.0/chip/chip.esm.js?module",
+          "primevue/usetoast": "https://unpkg.com/primevue@3.52.0/usetoast/usetoast.esm.js?module",
+          "primevue/useconfirm": "https://unpkg.com/primevue@3.52.0/useconfirm/useconfirm.esm.js?module"
         }
       }
     </script>
