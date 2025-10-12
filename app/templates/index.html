@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Circuits Library{% endblock %}
+
+{% block content %}
+  <div id="app"></div>
+  <script id="page-props" type="application/json">
+    {{ {
+      "circuits": circuits,
+      "error": error,
+      "payload": form_payload or ""
+    } | tojson }}
+  </script>
+{% endblock %}
+
+{% block scripts %}
+  <script type="module">
+    import { bootstrapPrimeVueApp } from "/static/js/app.js";
+    import HomePage from "/static/js/pages/home.js";
+
+    const propsElement = document.getElementById("page-props");
+    const props = propsElement ? JSON.parse(propsElement.textContent) : {};
+    bootstrapPrimeVueApp("#app", HomePage, props);
+  </script>
+{% endblock %}

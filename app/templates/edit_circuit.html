@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Edit • {{ circuit.name }}{% endblock %}
+
+{% block content %}
+  <div id="app"></div>
+  <script id="page-props" type="application/json">
+    {{ {
+      "circuit": {
+        "id": circuit.id,
+        "name": circuit.name,
+        "description": circuit.description,
+        "tasks": circuit.tasks()
+      },
+      "error": error or ""
+    } | tojson }}
+  </script>
+{% endblock %}
+
+{% block scripts %}
+  <script type="module">
+    import { bootstrapPrimeVueApp } from "/static/js/app.js";
+    import CircuitEditorPage from "/static/js/pages/editor.js";
+
+    const propsElement = document.getElementById("page-props");
+    const props = propsElement ? JSON.parse(propsElement.textContent) : {};
+    bootstrapPrimeVueApp("#app", CircuitEditorPage, props);
+  </script>
+{% endblock %}

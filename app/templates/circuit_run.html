@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Run • {{ circuit.name }}{% endblock %}
+
+{% block content %}
+  <div id="app"></div>
+  <script id="page-props" type="application/json">
+    {{ {"circuit": circuit_data} | tojson }}
+  </script>
+{% endblock %}
+
+{% block scripts %}
+  <script type="module">
+    import { bootstrapPrimeVueApp } from "/static/js/app.js";
+    import CircuitRunPage from "/static/js/pages/run.js";
+
+    const propsElement = document.getElementById("page-props");
+    const props = propsElement ? JSON.parse(propsElement.textContent) : {};
+    bootstrapPrimeVueApp("#app", CircuitRunPage, props);
+  </script>
+{% endblock %}
