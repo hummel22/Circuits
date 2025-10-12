@@ -90,6 +90,8 @@ const countdownSoundEnabled = ref(true);
 const completionSoundEnabled = ref(true);
 const audioContext = ref(null);
 const lastBeepSecond = ref(null);
+const taskStartedAt = ref(null);
+const remainingAtStart = ref(0);
 const taskRefs = ref([]);
 const taskRunner = ref(null);
 const { setCircuitContext, clearCircuitContext } = useCircuitTitle();
@@ -164,6 +166,8 @@ function clearTimer() {
 
 function startTimer() {
   clearTimer();
+  remainingAtStart.value = remaining.value || 0;
+  taskStartedAt.value = Date.now();
   timer.value = setInterval(tick, 1000);
 }
 
@@ -219,6 +223,8 @@ function resetTimer() {
   running.value = false;
   hasStarted.value = false;
   lastBeepSecond.value = null;
+  taskStartedAt.value = null;
+  remainingAtStart.value = remaining.value || 0;
 }
 
 function start() {
@@ -231,14 +237,18 @@ function start() {
 }
 
 function pause() {
+  syncRemainingWithClock();
   running.value = false;
   clearTimer();
+  taskStartedAt.value = null;
+  remainingAtStart.value = remaining.value || 0;
 }
 
 function resume() {
   if (completed.value) return;
   ensureAudioContext();
   running.value = true;
+  lastBeepSecond.value = null;
   startTimer();
 }
 
@@ -252,6 +262,7 @@ function startFrom(index) {
   hasStarted.value = true;
   running.value = true;
   lastBeepSecond.value = null;
+  remainingAtStart.value = remaining.value || 0;
   startTimer();
 }
 
@@ -277,20 +288,58 @@ function advance(triggeredByTimer = false) {
     clearTimer();
     running.value = false;
     remaining.value = 0;
+    taskStartedAt.value = null;
+    remainingAtStart.value = 0;
   } else {
     remaining.value = tasks[nextIndex].duration;
+    remainingAtStart.value = remaining.value || 0;
+    if (running.value) {
+      startTimer();
+    } else {
+      taskStartedAt.value = null;
+    }
   }
 }
 
 function tick() {
   if (!running.value) return;
-  if (remaining.value <= 1) {
+  if (!taskStartedAt.value) {
+    taskStartedAt.value = Date.now();
+    remainingAtStart.value = remaining.value || 0;
+  }
+  const elapsed = Math.floor((Date.now() - taskStartedAt.value) / 1000);
+  const nextRemaining = Math.max(remainingAtStart.value - elapsed, 0);
+  if (nextRemaining <= 0) {
+    remaining.value = 0;
     advance(true);
     return;
   }
-  const nextRemaining = remaining.value - 1;
-  maybePlayCountdown(nextRemaining);
-  remaining.value = nextRemaining;
+  if (nextRemaining !== remaining.value) {
+    maybePlayCountdown(nextRemaining);
+    remaining.value = nextRemaining;
+  }
+}
+
+function syncRemainingWithClock() {
+  if (!running.value || !taskStartedAt.value) {
+    return remaining.value || 0;
+  }
+  const elapsed = Math.floor((Date.now() - taskStartedAt.value) / 1000);
+  const nextRemaining = Math.max(remainingAtStart.value - elapsed, 0);
+  if (nextRemaining !== remaining.value) {
+    remaining.value = nextRemaining;
+  }
+  return nextRemaining;
+}
+
+function handleVisibilityReturn() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    return;
+  }
+  const remainingNow = syncRemainingWithClock();
+  if (running.value && remainingNow <= 0 && activeTask.value) {
+    advance(true);
+  }
 }
 
 function setTaskRef(el, index) {
@@ -330,12 +379,27 @@ watch(
 
 onMounted(loadCircuit);
 
+onMounted(() => {
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleVisibilityReturn);
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', handleVisibilityReturn);
+  }
+});
+
 onBeforeUnmount(() => {
   clearTimer();
   if (audioContext.value && typeof audioContext.value.close === 'function') {
     audioContext.value.close();
   }
   clearCircuitContext();
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', handleVisibilityReturn);
+  }
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('focus', handleVisibilityReturn);
+  }
 });
 </script>
 
