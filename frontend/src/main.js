@@ -7,29 +7,10 @@ const app = createApp(App);
 app.use(router);
 app.mount('#app');
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker
-    .getRegistrations()
-    .then((registrations) => {
-      const scopePrefix = `${window.location.origin}/`;
-      registrations
-        .filter((registration) => registration.scope.startsWith(scopePrefix))
-        .forEach((registration) => {
-          registration.unregister().catch(() => {
-            /* ignore */
-          });
-        });
-    })
-    .catch(() => {
-      /* ignore */
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {
+      // Ignore registration errors so the app still boots.
     });
-
-  if (window.caches?.keys) {
-    caches
-      .keys()
-      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
-      .catch(() => {
-        /* ignore */
-      });
-  }
+  });
 }
