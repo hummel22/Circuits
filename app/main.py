@@ -224,7 +224,15 @@ def serve_spa_root() -> FileResponse:
 def serve_spa(full_path: str):
     if full_path.startswith("api/") or full_path.startswith("static/"):
         raise HTTPException(status_code=404, detail="Not found")
+
     if full_path in {"manifest.json", "service-worker.js"}:
+        candidate = (SPA_DIR / full_path).resolve()
+        try:
+            candidate.relative_to(SPA_DIR)
+        except ValueError:
+            candidate = None
+        if candidate and candidate.is_file():
+            return FileResponse(candidate)
         raise HTTPException(status_code=404, detail="Not found")
     if not SPA_INDEX.exists():
         raise HTTPException(status_code=503, detail="SPA bundle not found. Run the frontend build.")
