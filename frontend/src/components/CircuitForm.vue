@@ -64,7 +64,7 @@
             </div>
           </div>
           <div class="task-actions">
-            <span class="badge">{{ task.duration }} sec</span>
+            <span class="badge">{{ formatMinutesLabel(task.duration) }} min</span>
             <button type="button" class="ghost" @click="removeTask(index)">Remove</button>
           </div>
         </article>
@@ -157,6 +157,17 @@ function removeTask(index) {
 }
 
 const submitLabel = computed(() => (props.submitting ? 'Saving…' : 'Save circuit'));
+
+function formatMinutesLabel(value) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return '0';
+  }
+  const minutes = numeric / 60;
+  const decimals = minutes >= 10 || Number.isInteger(minutes) ? 0 : 1;
+  const formatted = Number(minutes.toFixed(decimals));
+  return formatted.toString();
+}
 
 function handleSubmit() {
   const payload = {

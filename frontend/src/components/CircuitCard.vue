@@ -1,25 +1,32 @@
 <template>
-  <article class="card circuit-card">
+  <article
+    class="card circuit-card"
+    role="link"
+    tabindex="0"
+    @click="goToRun"
+    @keydown.enter.prevent="goToRun"
+    @keydown.space.prevent="goToRun"
+  >
     <header class="card-header">
       <div>
         <h2>{{ circuit.name }}</h2>
         <p class="muted">{{ circuit.description || 'No description provided.' }}</p>
       </div>
       <div class="badge">
-        <span>{{ totalDuration }}</span>
-        <span>sec</span>
+        <span>{{ totalDurationMinutes }}</span>
+        <span>min</span>
       </div>
     </header>
     <footer class="card-footer">
-      <RouterLink :to="`/circuits/${circuit.id}`" class="ghost">Edit</RouterLink>
-      <RouterLink :to="`/circuits/${circuit.id}/run`" class="primary">Run</RouterLink>
+      <RouterLink :to="`/circuits/${circuit.id}`" class="ghost" @click.stop>Edit</RouterLink>
+      <RouterLink :to="`/circuits/${circuit.id}/run`" class="primary" @click.stop>Run</RouterLink>
     </footer>
   </article>
 </template>
 
 <script setup>
 import { computed } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
 
 const props = defineProps({
   circuit: {
@@ -28,12 +35,38 @@ const props = defineProps({
   }
 });
 
-const totalDuration = computed(() => {
-  if (!props.circuit.tasks) {
+const router = useRouter();
+
+const totalSeconds = computed(() => {
+  if (!props.circuit.tasks?.length) {
     return 0;
   }
-  return props.circuit.tasks.reduce((total, task) => total + (task.duration || 0), 0);
+  return props.circuit.tasks.reduce((total, task) => total + normaliseSeconds(task.duration), 0);
 });
+
+const totalDurationMinutes = computed(() => formatMinutesValue(totalSeconds.value));
+
+function normaliseSeconds(value) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+}
+
+function formatMinutesValue(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return '0';
+  }
+  const minutes = seconds / 60;
+  const decimals = minutes >= 10 || Number.isInteger(minutes) ? 0 : 1;
+  const formatted = Number(minutes.toFixed(decimals));
+  return formatted.toString();
+}
+
+function goToRun() {
+  if (!props.circuit?.id) {
+    return;
+  }
+  router.push({ name: 'circuit-run', params: { id: props.circuit.id } });
+}
 </script>
 
 <style scoped>
@@ -42,6 +75,7 @@ const totalDuration = computed(() => {
   gap: 1.5rem;
   position: relative;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
 }
 
 .circuit-card::after {

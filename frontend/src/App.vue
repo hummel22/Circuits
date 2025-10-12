@@ -7,7 +7,7 @@
       </div>
       <nav class="app-nav">
         <RouterLink to="/">Circuits</RouterLink>
-        <RouterLink to="/circuits/new" class="primary">Create Circuit</RouterLink>
+        <RouterLink to="/circuits/new">Create Circuit</RouterLink>
         <RouterLink
           v-if="showCircuitLink"
           :to="circuitLinkTarget"

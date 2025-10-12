@@ -50,7 +50,7 @@
               <p v-else class="muted task-description">No description provided.</p>
             </div>
             <div class="task-meta">
-              <span class="badge">{{ task.duration }} sec</span>
+              <span class="badge">{{ formatMinutesLabel(task.duration) }} min</span>
               <button type="button" class="task-play" @click="startFrom(index)">
                 <span aria-hidden="true">▶</span>
                 <span class="sr-only">Start from {{ task.name }}</span>
@@ -119,6 +119,17 @@ const formattedRemaining = computed(() => {
   const seconds = String(total % 60).padStart(2, '0');
   return `${minutes}:${seconds}`;
 });
+
+function formatMinutesLabel(value) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return '0';
+  }
+  const minutes = numeric / 60;
+  const decimals = minutes >= 10 || Number.isInteger(minutes) ? 0 : 1;
+  const formatted = Number(minutes.toFixed(decimals));
+  return formatted.toString();
+}
 
 async function loadCircuit() {
   loading.value = true;
