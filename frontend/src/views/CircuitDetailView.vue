@@ -9,6 +9,14 @@
         <div class="inline">
           <RouterLink to="/" class="ghost">Back</RouterLink>
           <RouterLink :to="`/circuits/${id}/run`" class="primary">Run circuit</RouterLink>
+          <button
+            type="button"
+            class="ghost danger"
+            :disabled="submitting"
+            @click="handleDelete"
+          >
+            Delete
+          </button>
         </div>
       </header>
       <CircuitForm
@@ -16,9 +24,7 @@
         :model-value="circuit"
         :submitting="submitting"
         :error="error"
-        show-delete
         @submit="handleSubmit"
-        @delete="handleDelete"
       />
       <p v-else class="empty-state">Circuit not found.</p>
     </section>
