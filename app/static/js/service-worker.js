@@ -1,4 +1,4 @@
-const CACHE_NAME = "circuits-cache-v3";
+const CACHE_NAME = "circuits-cache-v4";
 const OFFLINE_URLS = [
   "/",
   "/static/css/style.css",
@@ -37,13 +37,23 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") {
     return;
   }
+
   let url;
   try {
     url = new URL(request.url);
   } catch (error) {
     return;
   }
+
   if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return;
+  }
+
+  // Only handle same-origin requests so CDN module fetches are not replaced with the
+  // fallback document when they fail CORS checks. Returning here lets the browser
+  // manage those requests directly and prevents HTML responses from being treated
+  // as JavaScript modules.
+  if (url.origin !== self.location.origin) {
     return;
   }
 
@@ -52,6 +62,7 @@ self.addEventListener("fetch", (event) => {
       if (cachedResponse) {
         return cachedResponse;
       }
+
       return fetch(request)
         .then((response) => {
           if (!response || response.status !== 200 || response.type !== "basic") {
