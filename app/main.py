@@ -13,10 +13,14 @@ from .database import get_session, init_db
 from .models import Circuit
 
 BASE_DIR = Path(__file__).resolve().parent
-SPA_INDEX = BASE_DIR / "static" / "index.html"
+SPA_DIR = BASE_DIR / "static"
+SPA_INDEX = SPA_DIR / "index.html"
+SPA_ASSETS_DIR = SPA_DIR / "assets"
 
 app = FastAPI(title="Circuits", description="Create, edit, and run timeboxed circuits.")
-app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+
+if SPA_ASSETS_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=SPA_ASSETS_DIR), name="spa-assets")
 
 
 def serialize_circuit_model(circuit: Circuit) -> Dict[str, Any]:
@@ -204,16 +208,6 @@ def circuit_schema():
     return schema
 
 
-@app.get("/manifest.json")
-def manifest() -> FileResponse:
-    return FileResponse(BASE_DIR / "static" / "manifest.json")
-
-
-@app.get("/service-worker.js")
-def service_worker() -> FileResponse:
-    return FileResponse(BASE_DIR / "static" / "js" / "service-worker.js")
-
-
 @app.get("/api/health")
 def healthcheck():
     return {"status": "ok"}
@@ -221,6 +215,8 @@ def healthcheck():
 
 @app.get("/", include_in_schema=False)
 def serve_spa_root() -> FileResponse:
+    if not SPA_INDEX.exists():
+        raise HTTPException(status_code=503, detail="SPA bundle not found. Run the frontend build.")
     return FileResponse(SPA_INDEX)
 
 
@@ -228,6 +224,26 @@ def serve_spa_root() -> FileResponse:
 def serve_spa(full_path: str):
     if full_path.startswith("api/") or full_path.startswith("static/"):
         raise HTTPException(status_code=404, detail="Not found")
+
     if full_path in {"manifest.json", "service-worker.js"}:
+        candidate = (SPA_DIR / full_path).resolve()
+        try:
+            candidate.relative_to(SPA_DIR)
+        except ValueError:
+            candidate = None
+        if candidate and candidate.is_file():
+            return FileResponse(candidate)
         raise HTTPException(status_code=404, detail="Not found")
+    if not SPA_INDEX.exists():
+        raise HTTPException(status_code=503, detail="SPA bundle not found. Run the frontend build.")
+
+    candidate = (SPA_DIR / full_path).resolve()
+    try:
+        candidate.relative_to(SPA_DIR)
+    except ValueError:
+        candidate = None
+
+    if candidate and candidate.is_file():
+        return FileResponse(candidate)
+
     return FileResponse(SPA_INDEX)

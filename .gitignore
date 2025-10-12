@@ -3,3 +3,6 @@ __pycache__/
 *.db
 .venv/
 .env
+node_modules/
+frontend/node_modules/
+app/static/
