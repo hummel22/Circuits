@@ -1,9 +1,0 @@
-{
-  "name": "Circuits",
-  "short_name": "Circuits",
-  "start_url": ".",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1976d2",
-  "description": "Build, edit, and run timeboxed training circuits."
-}
