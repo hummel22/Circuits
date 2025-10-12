@@ -190,6 +190,17 @@ body {
   display: none !important;
 }
 
+.fab-container {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 1000;
+}
+
+.fab-button {
+  box-shadow: 0 18px 40px rgba(63, 81, 181, 0.25);
+}
+
 @media (max-width: 640px) {
   .app-header__content {
     flex-direction: column;
