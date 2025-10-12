@@ -81,20 +81,24 @@
         }
       }
     </script>
-    <title>{% block title %}Circuits{% endblock %}</title>
-    {% block extra_head %}{% endblock %}
+    <title>Circuits</title>
   </head>
   <body class="app-shell">
     <header class="app-header">
       <div class="app-header__content container">
         <a href="/" class="app-logo">Circuits</a>
         <nav class="app-nav">
-          <a href="/circuit-schema" target="_blank" rel="noopener">Schema</a>
+          <a href="/api/circuit-schema" target="_blank" rel="noopener">Schema</a>
         </nav>
       </div>
     </header>
     <main class="app-main container">
-      {% block content %}{% endblock %}
+      <div id="app">
+        <div class="surface-card p-4 text-center">
+          <span class="pi pi-spin pi-spinner text-2xl"></span>
+          <p class="text-600 mt-3 mb-0">Loading circuits...</p>
+        </div>
+      </div>
     </main>
     <footer class="app-footer">
       <div class="container">
@@ -102,6 +106,6 @@
       </div>
     </footer>
     <script src="/static/js/pwa.js" defer></script>
-    {% block scripts %}{% endblock %}
+    <script type="module" src="/static/js/main.js"></script>
   </body>
 </html>

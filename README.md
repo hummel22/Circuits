@@ -7,7 +7,7 @@ Circuits is a self-contained web application that lets you create, store, edit, 
 - 📚 **Circuit library** – Store as many named circuits as you like. Each circuit contains an ordered list of tasks with names, descriptions, and durations in seconds.
 - 📤 **Flexible imports** – Paste JSON into the builder or upload a JSON file directly in the browser dialog. Validation ensures the data fits the expected schema.
 - 🛠️ **Visual editor** – Use the PrimeVue builder to add, remove, and reorder steps with duration controls—no raw JSON editing required.
-- 📄 **JSON schema export** – Visit `/circuit-schema` to retrieve a JSON Schema plus an example payload (perfect for AI assistants).
+- 📄 **JSON schema export** – Visit `/api/circuit-schema` to retrieve a JSON Schema plus an example payload (perfect for AI assistants).
 - ⏱️ **Guided runner** – Start a circuit to see the active task, remaining time, and the upcoming task in muted text. Configure finish actions (sound, vibration, or both), toggle 5-second countdown alerts, and pause or stop the timer at any time.
 - 💾 **Local persistence** – All data is stored in `circuits.db` using SQLite.
 - 📱 **Installable experience** – A web app manifest and service worker enable PWA installation on Android devices and offline caching of core assets.
@@ -19,8 +19,8 @@ app/
 ├── main.py              # FastAPI application and routes
 ├── models.py            # SQLModel definitions
 ├── database.py          # SQLite engine helpers
-├── templates/           # Jinja templates for the UI
-└── static/              # CSS, JS, icons, manifest, and service worker
+├── templates/           # Legacy Jinja templates (unused by the SPA runtime)
+└── static/              # SPA entrypoint, CSS, JS, icons, manifest, and service worker
 ```
 
 ## Running locally
@@ -56,7 +56,7 @@ This maps the service to <http://localhost:8000> and persists `circuits.db` to t
 
 ## JSON schema
 
-The circuit schema is available at <http://localhost:8000/circuit-schema>:
+The circuit schema is available at <http://localhost:8000/api/circuit-schema>:
 
 ```json
 {
