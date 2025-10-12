@@ -1,32 +1,86 @@
 # Circuits
 
-Circuits web service that given a structure jason file that describes a circuit, can run throught the circuit.
+Circuits is a self-contained web application that lets you create, store, edit, and run training circuits backed by a local SQLite database. Both the Material Design-inspired user interface and the JSON API are served from the same FastAPI service, making it easy to run locally or inside a container.
 
-The circuit will be described as [Name, descriptions, duration]
+## Features
 
-The webservice can store multiple circuits
+- 📚 **Circuit library** – Store as many named circuits as you like. Each circuit contains an ordered list of tasks with names, descriptions, and durations in seconds.
+- 📤 **Flexible imports** – Paste JSON into the builder or upload a JSON file to create a new circuit. Validation ensures the data fits the expected schema.
+- ⚙️ **In-place editing** – Every circuit page includes a settings icon that opens a JSON editor for quick adjustments.
+- 📄 **JSON schema export** – Visit `/circuit-schema` to retrieve a JSON Schema plus an example payload (perfect for AI assistants).
+- ⏱️ **Guided runner** – Start a circuit to see the active task, remaining time, and the upcoming task in muted text. Configure finish actions (sound, vibration, or both), toggle 5-second countdown alerts, and pause or stop the timer at any time.
+- 💾 **Local persistence** – All data is stored in `circuits.db` using SQLite.
+- 📱 **Installable experience** – A web app manifest and service worker enable PWA installation on Android devices and offline caching of core assets.
 
-A user can click on a circuit to tview the circuit as tabel
+## Project layout
 
-There will be a settings icon on each circuit page where you can view the json and edit
+```
+app/
+├── main.py              # FastAPI application and routes
+├── models.py            # SQLModel definitions
+├── database.py          # SQLite engine helpers
+├── templates/           # Jinja templates for the UI
+└── static/              # CSS, JS, icons, manifest, and service worker
+```
 
-A user can upload or input json file or stings to create the circuit
+## Running locally
 
-There is a json schema that can be exported to help AI Agents build circuits with an asistance prompt
+The repository provides a convenience script that bootstraps a virtual environment, installs dependencies, and launches the development server:
 
-When a circuit is run, It will show the Name of the circuit as a header, the descripoins and the time remaining, 
- Below the time in a faded letters will be the next task
- The user can configure what happedn when the timer finishes (sounds [users can select before starting, or vibration)
- the user can toggle on/off the 5 seconds left countdown sound or vibration, That sound is already defined)
- The user can also pause then stop the circuit. 
+```bash
+./setup.sh
+```
 
- All data is stored to local sqlite db
+The application becomes available at <http://127.0.0.1:8000>. The first run creates `circuits.db` in the project root.
 
+### Manual setup
 
-The app uses material UI designs and can be install on android phones as web app
+If you prefer to manage the environment yourself:
 
-The service can run using a setup.sh which will install the venv , dependenaces and run thers service
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
 
-There is also a dockerFile and docker-compose file to build the image and run on docker
+## Docker
 
-The app is self contained in a single service (Hosting the UI and the backend apis)
+Build and run the container with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+This maps the service to <http://localhost:8000> and persists `circuits.db` to the host.
+
+## JSON schema
+
+The circuit schema is available at <http://localhost:8000/circuit-schema>:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Circuit",
+  "type": "object",
+  "required": ["name", "tasks"],
+  "properties": {
+    "name": {"type": "string"},
+    "description": {"type": "string"},
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "duration"],
+        "properties": {
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "duration": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  }
+}
+```
+
+Use this document to validate payloads or guide automated agents that generate circuits.

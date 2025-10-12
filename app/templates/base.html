@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1976d2" />
+    <title>{% block title %}Circuits{% endblock %}</title>
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
+      integrity="sha512-1T3OG8UeNuvdvZk90un0nLBKBPXn1HULICwhf66A1VpzwuNFuIBqmoeZaZX6RMb7PynmHUn0pV6rYb0bC3yBUA=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <link rel="stylesheet" href="/static/css/style.css" />
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body class="blue-grey lighten-5">
+    <nav class="blue darken-2">
+      <div class="nav-wrapper container">
+        <a href="/" class="brand-logo">Circuits</a>
+        <ul id="nav-mobile" class="right hide-on-med-and-down">
+          <li><a href="/circuit-schema" target="_blank">Schema</a></li>
+        </ul>
+      </div>
+    </nav>
+    <main class="container">
+      {% block content %}{% endblock %}
+    </main>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"
+      integrity="sha512-Cecw2j0xOoXQsa1+lZeI7IuAv89xDSHLVbkP4SRrped1IovnHgkmHGawEq+yLkOlLXumn4Wr9PXqkF0vE1xY0w=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+      defer
+    ></script>
+    <script src="/static/js/pwa.js" defer></script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

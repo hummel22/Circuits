@@ -1,0 +1,41 @@
+body {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+main {
+  flex: 1 0 auto;
+  padding-top: 32px;
+  padding-bottom: 64px;
+}
+
+.timer-display .timer-value {
+  font-size: 4rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+#next-step {
+  font-size: 1.2rem;
+  margin-top: 8px;
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.collection .collection-item.active {
+  background-color: #bbdefb;
+  color: #0d47a1;
+}
+
+.card .card-title .material-icons {
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+textarea.materialize-textarea {
+  min-height: 200px;
+}
+
+footer.page-footer {
+  margin-top: 40px;
+}

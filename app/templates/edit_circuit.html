@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Edit • {{ circuit.name }}{% endblock %}
+
+{% block content %}
+  <div class="section">
+    <div class="card">
+      <div class="card-content">
+        <span class="card-title">Edit Circuit</span>
+        <p class="grey-text text-darken-1">
+          Update the JSON structure below. It must follow the circuit schema.
+        </p>
+        {% if error %}
+          <p class="red-text">{{ error }}</p>
+        {% endif %}
+        <form action="/circuits/{{ circuit.id }}/edit" method="post">
+          <div class="input-field">
+            <textarea
+              id="payload"
+              name="payload"
+              class="materialize-textarea"
+              rows="20"
+              required
+            >{{ payload }}</textarea>
+            <label for="payload" class="active">Circuit JSON</label>
+          </div>
+          <button type="submit" class="btn blue darken-2 waves-effect waves-light">
+            <i class="material-icons left">save</i>
+            Save Changes
+          </button>
+          <a href="/circuits/{{ circuit.id }}" class="btn-flat waves-effect">Cancel</a>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endblock %}
