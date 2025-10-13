@@ -558,10 +558,12 @@ onBeforeUnmount(() => {
   border-radius: 1rem;
   max-width: 32rem;
   width: min(32rem, 100%);
+  max-height: min(85vh, 40rem);
   box-shadow: 0 24px 55px -25px rgba(15, 23, 42, 0.55);
   padding: 1.5rem;
   display: grid;
-  gap: 1.25rem;
+  gap: 1rem;
+  overflow-y: auto;
 }
 
 .run-detail-header {
@@ -593,7 +595,7 @@ onBeforeUnmount(() => {
 .run-detail-metrics {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.4rem;
   font-size: 0.9rem;
   color: #475569;
 }
@@ -606,7 +608,7 @@ onBeforeUnmount(() => {
 .run-detail-counts {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.5rem;
   font-size: 0.85rem;
   color: #475569;
 }
@@ -628,7 +630,7 @@ onBeforeUnmount(() => {
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .task-item {
