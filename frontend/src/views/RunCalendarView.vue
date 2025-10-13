@@ -54,11 +54,9 @@
                 @keydown.space.prevent="openRunDetails(run)"
               >
                 <div class="run-chip-content">
-                  <div class="run-chip-meta">
-                    <span class="run-time" v-if="run.startTimeLabel">{{ run.startTimeLabel }}</span>
-                    <span class="run-duration">{{ run.completedMinutesLabel }} / {{ run.totalMinutesLabel }} min</span>
-                  </div>
+                  <span class="run-time" v-if="run.startTimeLabel">{{ run.startTimeLabel }}</span>
                   <span class="run-percent">{{ formatPercent(run.completionPercent) }}</span>
+                  <span class="run-duration">{{ run.completedMinutesLabel }} / {{ run.totalMinutesLabel }} min</span>
                 </div>
               </div>
             </div>
@@ -435,6 +433,7 @@ onBeforeUnmount(() => {
   padding: 0.75rem;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(148, 163, 184, 0.35);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -490,10 +489,7 @@ onBeforeUnmount(() => {
   border-radius: 0.85rem;
   padding: 0.6rem 0.75rem;
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  box-sizing: border-box;
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
@@ -519,18 +515,9 @@ onBeforeUnmount(() => {
 
 .run-chip-content {
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.run-chip-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.8rem;
-  color: #475569;
+  display: grid;
+  gap: 0.2rem;
+  justify-items: start;
 }
 
 .run-chip:focus-visible {
