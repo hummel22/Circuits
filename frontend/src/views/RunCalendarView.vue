@@ -43,21 +43,22 @@
               <span v-if="day.isToday" class="today-pill">Today</span>
             </div>
             <div class="day-runs" v-if="day.runs.length">
-              <div v-for="run in day.runs" :key="run.id" class="run-chip">
-                <div class="run-chip-header">
-                  <div class="run-chip-title">
-                    <span v-if="run.startTimeLabel" class="run-time">{{ run.startTimeLabel }}</span>
-                    <span class="run-circuit">{{ run.circuitName }}</span>
+              <div
+                v-for="run in day.runs"
+                :key="run.id"
+                class="run-chip"
+                role="button"
+                tabindex="0"
+                @click="openRunDetails(run)"
+                @keydown.enter.prevent="openRunDetails(run)"
+                @keydown.space.prevent="openRunDetails(run)"
+              >
+                <div class="run-chip-content">
+                  <div class="run-chip-meta">
+                    <span class="run-time" v-if="run.startTimeLabel">{{ run.startTimeLabel }}</span>
+                    <span class="run-duration">{{ run.completedMinutesLabel }} / {{ run.totalMinutesLabel }} min</span>
                   </div>
                   <span class="run-percent">{{ formatPercent(run.completionPercent) }}</span>
-                </div>
-                <div class="run-chip-meta">
-                  <span class="meta-time">{{ run.completedMinutesLabel }} / {{ run.totalMinutesLabel }} min</span>
-                  <div class="meta-status">
-                    <span class="meta completed" v-if="run.completedCount">✓ {{ run.completedCount }}</span>
-                    <span class="meta skipped" v-if="run.skippedCount">↷ {{ run.skippedCount }}</span>
-                    <span class="meta not-done" v-if="run.notDoneCount">○ {{ run.notDoneCount }}</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -69,11 +70,53 @@
         </p>
       </div>
     </section>
+    <div
+      v-if="selectedRun"
+      class="run-detail-backdrop"
+      role="presentation"
+      @click.self="closeRunDetails"
+    >
+      <section
+        class="run-detail-card"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="`run-detail-title-${selectedRun.id}`"
+      >
+        <header class="run-detail-header">
+          <div class="run-detail-heading">
+            <p class="run-detail-date">{{ selectedRun.fullDateLabel }}</p>
+            <h3 :id="`run-detail-title-${selectedRun.id}`">{{ selectedRun.circuitName }}</h3>
+            <p class="run-detail-metrics">
+              <span class="detail-percent">{{ formatPercent(selectedRun.completionPercent) }}</span>
+              <span class="detail-duration">{{ selectedRun.completedMinutesLabel }} / {{ selectedRun.totalMinutesLabel }} min</span>
+            </p>
+          </div>
+          <button type="button" class="ghost close" @click="closeRunDetails" aria-label="Close details">×</button>
+        </header>
+        <div class="run-detail-counts">
+          <span class="count completed">✓ {{ selectedRun.completedCount }} completed</span>
+          <span class="count skipped">↷ {{ selectedRun.skippedCount }} skipped</span>
+          <span class="count not-done">○ {{ selectedRun.notDoneCount }} not done</span>
+        </div>
+        <ul class="task-list">
+          <li v-for="task in selectedRun.tasks" :key="task.index" class="task-item" :class="task.status">
+            <span class="task-status" aria-hidden="true">{{ statusIcon(task.status) }}</span>
+            <div class="task-info">
+              <p class="task-name">{{ task.name }}</p>
+              <p class="task-meta">
+                <span>{{ task.minutesLabel }} min</span>
+                <span>· {{ statusLabel(task.status) }}</span>
+              </p>
+            </div>
+          </li>
+        </ul>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { listCircuitRuns } from '../api';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -82,6 +125,7 @@ const loading = ref(true);
 const error = ref('');
 const today = new Date();
 const currentMonth = ref(new Date(today.getFullYear(), today.getMonth(), 1));
+const selectedRun = ref(null);
 
 const monthFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'long',
@@ -209,9 +253,17 @@ function normalizeRun(raw) {
   const totalSeconds = Number(raw.total_duration_seconds) || 0;
   const completedSeconds = Number(raw.completed_duration_seconds) || 0;
   const tasks = Array.isArray(raw.tasks) ? raw.tasks : [];
-  const counts = tasks.reduce(
+  const normalizedTasks = tasks
+    .map((task) => ({
+      index: Number.isInteger(task?.index) ? task.index : 0,
+      name: task?.name || `Task ${(task?.index ?? 0) + 1}`,
+      status: task?.status || 'not_done',
+      minutesLabel: formatMinutesLabel(task?.duration || 0)
+    }))
+    .sort((a, b) => a.index - b.index);
+  const counts = normalizedTasks.reduce(
     (acc, task) => {
-      const status = task?.status;
+      const status = task.status;
       if (status === 'completed') acc.completed += 1;
       else if (status === 'skipped') acc.skipped += 1;
       else if (status === 'not_done') acc.notDone += 1;
@@ -232,7 +284,15 @@ function normalizeRun(raw) {
     completedCount: counts.completed,
     skippedCount: counts.skipped,
     notDoneCount: counts.notDone,
-    startTimeLabel: startedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    startTimeLabel: startedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    fullDateLabel: startedAt.toLocaleString([], {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
+    tasks: normalizedTasks
   };
 }
 
@@ -268,7 +328,40 @@ function goToToday() {
   currentMonth.value = new Date(today.getFullYear(), today.getMonth(), 1);
 }
 
+function openRunDetails(run) {
+  selectedRun.value = run;
+}
+
+function closeRunDetails() {
+  selectedRun.value = null;
+}
+
+function statusLabel(status) {
+  if (status === 'completed') return 'Completed';
+  if (status === 'skipped') return 'Skipped';
+  return 'Not done';
+}
+
+function statusIcon(status) {
+  if (status === 'completed') return '✓';
+  if (status === 'skipped') return '↷';
+  return '○';
+}
+
+function handleKeydown(event) {
+  if (event.key === 'Escape' && selectedRun.value) {
+    closeRunDetails();
+  }
+}
+
 onMounted(loadRunHistory);
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
 </script>
 
 <style scoped>
@@ -396,27 +489,13 @@ onMounted(loadRunHistory);
   border: 1px solid rgba(124, 58, 237, 0.15);
   border-radius: 0.85rem;
   padding: 0.6rem 0.75rem;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.run-chip-header {
+  width: 100%;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: baseline;
   gap: 0.75rem;
-}
-
-.run-chip-title {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-.run-circuit {
-  font-weight: 600;
-  color: #312e81;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .run-time {
@@ -426,45 +505,42 @@ onMounted(loadRunHistory);
   letter-spacing: 0.04em;
 }
 
+.run-duration {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+}
+
 .run-percent {
   font-weight: 700;
   color: #0f766e;
 }
 
+
+.run-chip-content {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .run-chip-meta {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+  flex-direction: column;
+  gap: 0.25rem;
   font-size: 0.8rem;
   color: #475569;
 }
 
-.meta-status {
-  display: inline-flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  align-items: center;
+.run-chip:focus-visible {
+  outline: 2px solid rgba(79, 70, 229, 0.5);
+  outline-offset: 2px;
 }
 
-.meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-weight: 600;
-}
-
-.meta.completed {
-  color: #2563eb;
-}
-
-.meta.skipped {
-  color: #dc2626;
-}
-
-.meta.not-done {
-  color: #ca8a04;
+.run-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px -20px rgba(79, 70, 229, 0.65);
 }
 
 .day-placeholder {
@@ -480,6 +556,147 @@ onMounted(loadRunHistory);
   color: #b91c1c;
 }
 
+.run-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  z-index: 20;
+}
+
+.run-detail-card {
+  background: #ffffff;
+  border-radius: 1rem;
+  max-width: 32rem;
+  width: min(32rem, 100%);
+  box-shadow: 0 24px 55px -25px rgba(15, 23, 42, 0.55);
+  padding: 1.5rem;
+  display: grid;
+  gap: 1.25rem;
+}
+
+.run-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.run-detail-heading {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.run-detail-date {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6366f1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.run-detail-heading h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #312e81;
+}
+
+.run-detail-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.detail-percent {
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.run-detail-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.run-detail-counts .count.completed {
+  color: #2563eb;
+}
+
+.run-detail-counts .count.skipped {
+  color: #dc2626;
+}
+
+.run-detail-counts .count.not-done {
+  color: #ca8a04;
+}
+
+.task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.task-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.task-status {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #6366f1;
+  line-height: 1.2;
+}
+
+.task-item.completed .task-status {
+  color: #2563eb;
+}
+
+.task-item.skipped .task-status {
+  color: #dc2626;
+}
+
+.task-item.not_done .task-status {
+  color: #ca8a04;
+}
+
+.task-info {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.task-name {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.task-meta {
+  font-size: 0.8rem;
+  color: #64748b;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.calendar-card .close {
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+}
+
+.run-chip:active {
+  transform: translateY(0);
+}
+
 @media (max-width: 900px) {
   .calendar-grid,
   .calendar-weekdays {
@@ -489,6 +706,10 @@ onMounted(loadRunHistory);
   .calendar-day {
     min-height: 7.5rem;
     padding: 0.6rem;
+  }
+
+  .run-detail-card {
+    padding: 1.25rem;
   }
 }
 
@@ -509,6 +730,10 @@ onMounted(loadRunHistory);
 
   .calendar-weekdays {
     display: none;
+  }
+
+  .run-detail-card {
+    width: 100%;
   }
 }
 </style>
