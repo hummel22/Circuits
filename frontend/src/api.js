@@ -61,3 +61,17 @@ export async function fetchHealth() {
   const response = await fetch(`${BASE_URL}/health`);
   return handleResponse(response);
 }
+
+export async function createCircuitRun(circuitId, payload) {
+  const response = await fetch(`${BASE_URL}/circuits/${circuitId}/runs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function listCircuitRuns() {
+  const response = await fetch(`${BASE_URL}/runs`);
+  return handleResponse(response);
+}

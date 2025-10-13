@@ -7,6 +7,7 @@
       </div>
       <nav class="app-nav">
         <RouterLink to="/">Circuits</RouterLink>
+        <RouterLink to="/calendar">Calendar</RouterLink>
         <RouterLink to="/circuits/new">Create Circuit</RouterLink>
         <RouterLink
           v-if="showCircuitLink"
