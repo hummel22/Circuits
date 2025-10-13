@@ -20,7 +20,8 @@
           <button v-if="!running && !completed" class="primary" @click="start">Start</button>
           <button v-if="running" class="ghost" @click="pause">Pause</button>
           <button v-if="!running && !completed && hasStarted" class="ghost" @click="resume">Resume</button>
-          <button v-if="running || hasStarted" class="ghost" @click="next">Skip</button>
+          <button v-if="running || hasStarted" class="ghost" @click="completeActiveTask">Complete</button>
+          <button v-if="running || hasStarted" class="ghost" @click="skipCurrentTask">Skip</button>
           <button v-if="completed" class="primary" @click="restart">Restart</button>
         </div>
         <div class="sound-toggles">
@@ -40,7 +41,11 @@
           v-for="(task, index) in circuit.tasks"
           :key="`${task.name}-${index}`"
           class="task-card run-task"
-          :class="{ active: index === highlightIndex, completed: index < currentIndex }"
+          :class="{
+            active: index === highlightIndex,
+            completed: taskStatuses[index] === 'completed',
+            skipped: taskStatuses[index] === 'skipped'
+          }"
           :ref="(el) => setTaskRef(el, index)"
         >
           <header class="inline task-header">
@@ -51,10 +56,28 @@
             </div>
             <div class="task-meta">
               <span class="badge">{{ formatMinutesLabel(task.duration) }} min</span>
-              <button type="button" class="task-play" @click="startFrom(index)">
-                <span aria-hidden="true">▶</span>
-                <span class="sr-only">Start from {{ task.name }}</span>
-              </button>
+              <div class="task-actions">
+                <button
+                  type="button"
+                  class="task-complete"
+                  :disabled="index !== currentIndex || completed"
+                  @click="completeTask(index)"
+                >
+                  <span aria-hidden="true">✓</span>
+                  <span class="sr-only">Complete {{ task.name }}</span>
+                </button>
+                <button type="button" class="task-play" @click="startFrom(index)">
+                  <span aria-hidden="true">▶</span>
+                  <span class="sr-only">Start from {{ task.name }}</span>
+                </button>
+              </div>
+              <span
+                v-if="taskStatuses[index] && taskStatuses[index] !== 'pending'"
+                class="status-chip"
+                :class="taskStatuses[index]"
+              >
+                {{ taskStatusLabel(taskStatuses[index]) }}
+              </span>
             </div>
           </header>
           <div v-if="index === currentIndex && !completed" class="task-timer" aria-live="polite">
@@ -69,7 +92,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { RouterLink } from 'vue-router';
-import { getCircuit } from '../api';
+import { getCircuit, createCircuitRun } from '../api';
 import { useCircuitTitle } from '../composables/useCircuitTitle';
 
 const props = defineProps({
@@ -94,6 +117,10 @@ const taskStartedAt = ref(null);
 const remainingAtStart = ref(0);
 const taskRefs = ref([]);
 const taskRunner = ref(null);
+const taskStatuses = ref([]);
+const runStartedAt = ref(null);
+const submittingRun = ref(false);
+const hasRecordedRun = ref(false);
 const { setCircuitContext, clearCircuitContext } = useCircuitTitle();
 
 const completed = computed(() => circuit.value && currentIndex.value >= circuit.value.tasks.length);
@@ -133,6 +160,39 @@ function formatMinutesLabel(value) {
   return formatted.toString();
 }
 
+function initializeTaskStatuses() {
+  const count = circuit.value?.tasks?.length ?? 0;
+  taskStatuses.value = Array.from({ length: count }, () => 'pending');
+}
+
+function setTaskStatus(index, status) {
+  if (!Array.isArray(taskStatuses.value)) {
+    taskStatuses.value = [];
+  }
+  if (index < 0) return;
+  if (index >= taskStatuses.value.length) return;
+  taskStatuses.value[index] = status;
+}
+
+function markRunStarted() {
+  if (!runStartedAt.value) {
+    runStartedAt.value = new Date();
+  }
+}
+
+function taskStatusLabel(status) {
+  switch (status) {
+    case 'completed':
+      return 'Completed';
+    case 'skipped':
+      return 'Skipped';
+    case 'not_done':
+      return 'Not done';
+    default:
+      return '';
+  }
+}
+
 async function loadCircuit() {
   loading.value = true;
   try {
@@ -150,6 +210,7 @@ async function loadCircuit() {
     }
   } catch (err) {
     circuit.value = null;
+    taskStatuses.value = [];
     console.error(err);
     clearCircuitContext();
   } finally {
@@ -225,6 +286,59 @@ function resetTimer() {
   lastBeepSecond.value = null;
   taskStartedAt.value = null;
   remainingAtStart.value = remaining.value || 0;
+  runStartedAt.value = null;
+  hasRecordedRun.value = false;
+  submittingRun.value = false;
+  initializeTaskStatuses();
+}
+
+async function finalizeRun(options = {}) {
+  const { markCurrentAs } = options;
+  if (
+    !circuit.value ||
+    !circuit.value.id ||
+    !runStartedAt.value ||
+    hasRecordedRun.value ||
+    submittingRun.value
+  ) {
+    return;
+  }
+
+  const tasks = Array.isArray(circuit.value.tasks) ? circuit.value.tasks : [];
+  const statuses = Array.isArray(taskStatuses.value)
+    ? taskStatuses.value.slice()
+    : Array.from({ length: tasks.length }, () => 'pending');
+  if (
+    typeof markCurrentAs === 'string' &&
+    currentIndex.value < tasks.length &&
+    (!statuses[currentIndex.value] || statuses[currentIndex.value] === 'pending')
+  ) {
+    statuses[currentIndex.value] = markCurrentAs;
+  }
+
+  const normalized = tasks.map((_, index) => {
+    const status = statuses[index] || 'pending';
+    return {
+      index,
+      status: status === 'pending' ? 'not_done' : status,
+    };
+  });
+
+  const payload = {
+    started_at: runStartedAt.value.toISOString(),
+    ended_at: new Date().toISOString(),
+    tasks: normalized,
+  };
+
+  submittingRun.value = true;
+  try {
+    await createCircuitRun(circuit.value.id, payload);
+    hasRecordedRun.value = true;
+  } catch (error) {
+    console.error('Failed to record circuit run history', error);
+  } finally {
+    submittingRun.value = false;
+  }
 }
 
 function start() {
@@ -233,6 +347,7 @@ function start() {
   hasStarted.value = true;
   running.value = true;
   lastBeepSecond.value = null;
+  markRunStarted();
   startTimer();
 }
 
@@ -249,6 +364,7 @@ function resume() {
   ensureAudioContext();
   running.value = true;
   lastBeepSecond.value = null;
+  markRunStarted();
   startTimer();
 }
 
@@ -263,23 +379,41 @@ function startFrom(index) {
   running.value = true;
   lastBeepSecond.value = null;
   remainingAtStart.value = remaining.value || 0;
+  markRunStarted();
   startTimer();
 }
 
-function next() {
-  advance(false);
+function skipCurrentTask() {
+  advance(false, 'skipped');
 }
 
-function restart() {
+function completeTask(index) {
+  if (!circuit.value) return;
+  if (completed.value) return;
+  if (index !== currentIndex.value) return;
+  advance(false, 'completed');
+}
+
+function completeActiveTask() {
+  completeTask(currentIndex.value);
+}
+
+async function restart() {
+  await finalizeRun({ markCurrentAs: 'not_done' });
   resetTimer();
 }
 
-function advance(triggeredByTimer = false) {
+function advance(triggeredByTimer = false, statusOverride = null) {
   if (!circuit.value) return;
   const tasks = circuit.value.tasks;
-  const nextIndex = currentIndex.value + 1;
+  const current = currentIndex.value;
+  if (current < tasks.length) {
+    const status = statusOverride || (triggeredByTimer ? 'completed' : 'skipped');
+    setTaskStatus(current, status);
+  }
+  const nextIndex = current + 1;
   const willComplete = nextIndex >= tasks.length;
-  if (triggeredByTimer) {
+  if (triggeredByTimer || (statusOverride === 'completed' && willComplete)) {
     playCompletionSound(willComplete);
   }
   currentIndex.value = nextIndex;
@@ -290,6 +424,9 @@ function advance(triggeredByTimer = false) {
     remaining.value = 0;
     taskStartedAt.value = null;
     remainingAtStart.value = 0;
+    Promise.resolve()
+      .then(() => finalizeRun())
+      .catch((error) => console.error('Failed to finalize run', error));
   } else {
     remaining.value = tasks[nextIndex].duration;
     remainingAtStart.value = remaining.value || 0;
@@ -370,9 +507,10 @@ watch(
 
 watch(
   () => props.id,
-  (newId, oldId) => {
+  async (newId, oldId) => {
     if (newId && newId !== oldId) {
-      loadCircuit();
+      await finalizeRun({ markCurrentAs: 'not_done' });
+      await loadCircuit();
     }
   }
 );
@@ -389,6 +527,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  finalizeRun({ markCurrentAs: 'not_done' }).catch((error) =>
+    console.error('Failed to finalize run', error)
+  );
   clearTimer();
   if (audioContext.value && typeof audioContext.value.close === 'function') {
     audioContext.value.close();
@@ -474,6 +615,11 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 
+.run-task.skipped {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
 .task-header {
   justify-content: space-between;
   align-items: flex-start;
@@ -510,6 +656,37 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 
+.task-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.task-complete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(13, 148, 136, 0.35);
+  background: #ecfdf5;
+  color: #047857;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.task-complete:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px -16px rgba(4, 120, 87, 0.55);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.task-complete:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+}
+
 .task-play {
   display: inline-flex;
   align-items: center;
@@ -532,6 +709,31 @@ onBeforeUnmount(() => {
 
 .task-play span[aria-hidden='true'] {
   font-size: 1rem;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.status-chip.completed {
+  background: rgba(59, 130, 246, 0.1);
+  color: #1d4ed8;
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
+.status-chip.skipped {
+  background: rgba(248, 113, 113, 0.12);
+  color: #b91c1c;
+  border-color: rgba(248, 113, 113, 0.25);
 }
 
 .task-timer {

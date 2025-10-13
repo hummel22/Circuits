@@ -3,6 +3,7 @@ import CircuitListView from '../views/CircuitListView.vue';
 import CircuitDetailView from '../views/CircuitDetailView.vue';
 import CircuitRunView from '../views/CircuitRunView.vue';
 import CircuitCreateView from '../views/CircuitCreateView.vue';
+import RunCalendarView from '../views/RunCalendarView.vue';
 
 const routes = [
   {
@@ -26,6 +27,11 @@ const routes = [
     name: 'circuit-run',
     component: CircuitRunView,
     props: true,
+  },
+  {
+    path: '/calendar',
+    name: 'calendar',
+    component: RunCalendarView,
   }
 ];
 
