@@ -11,6 +11,11 @@
       <div>
         <h2>{{ circuit.name }}</h2>
         <p class="muted">{{ circuit.description || 'No description provided.' }}</p>
+        <p class="run-status" :class="statusClass">
+          <span class="status-indicator"></span>
+          <span>{{ statusLabel }}</span>
+          <span class="run-duration">· {{ elapsedLabel }}</span>
+        </p>
       </div>
       <div class="badge">
         <span>{{ totalDurationMinutes }}</span>
@@ -46,6 +51,39 @@ const totalSeconds = computed(() => {
 
 const totalDurationMinutes = computed(() => formatMinutesValue(totalSeconds.value));
 
+const statusLabel = computed(() => {
+  const status = props.circuit?.active_run?.status;
+  if (status === 'in_progress') {
+    return 'In progress';
+  }
+  if (status === 'paused') {
+    return 'Paused';
+  }
+  return 'Not started';
+});
+
+const statusClass = computed(() => {
+  const status = props.circuit?.active_run?.status;
+  if (status === 'in_progress') {
+    return 'status-in-progress';
+  }
+  if (status === 'paused') {
+    return 'status-paused';
+  }
+  return 'status-idle';
+});
+
+const elapsedSeconds = computed(() => {
+  const raw = props.circuit?.active_run?.elapsed_seconds;
+  const numeric = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 0;
+  }
+  return Math.floor(numeric);
+});
+
+const elapsedLabel = computed(() => formatElapsed(elapsedSeconds.value));
+
 function normaliseSeconds(value) {
   const numeric = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
@@ -59,6 +97,13 @@ function formatMinutesValue(seconds) {
   const decimals = minutes >= 10 || Number.isInteger(minutes) ? 0 : 1;
   const formatted = Number(minutes.toFixed(decimals));
   return formatted.toString();
+}
+
+function formatElapsed(seconds) {
+  const total = Math.max(0, Number(seconds) || 0);
+  const minutes = String(Math.floor(total / 60)).padStart(2, '0');
+  const secs = String(total % 60).padStart(2, '0');
+  return `${minutes}:${secs}`;
 }
 
 function goToRun() {
@@ -98,7 +143,7 @@ function goToRun() {
   opacity: 1;
 }
 
-.card-header {
+.card-header { 
   display: flex;
   justify-content: space-between;
   gap: 1.5rem;
@@ -114,6 +159,38 @@ function goToRun() {
 .card-header .muted {
   color: rgba(100, 116, 139, 0.95);
   margin-top: 0.5rem;
+}
+
+.run-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.run-status .status-indicator {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: #cbd5f5;
+}
+
+.run-status.status-in-progress .status-indicator {
+  background: #10b981;
+}
+
+.run-status.status-paused .status-indicator {
+  background: #f59e0b;
+}
+
+.run-status.status-idle .status-indicator {
+  background: #cbd5f5;
+}
+
+.run-status .run-duration {
+  color: #475569;
 }
 
 .card-footer {

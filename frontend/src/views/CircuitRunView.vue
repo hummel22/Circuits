@@ -7,21 +7,30 @@
       <div class="empty-state">Circuit not found.</div>
     </section>
     <section class="card run-shell" v-else>
-      <header class="inline" style="justify-content: space-between; align-items: center;">
+      <header class="inline run-header" style="justify-content: space-between; align-items: center;">
         <div>
           <h2 class="section-title" style="margin: 0;">{{ circuit.name }}</h2>
           <p class="muted">{{ circuit.description || 'No description provided.' }}</p>
         </div>
-        <RouterLink :to="`/circuits/${circuit.id}`" class="ghost">Back to edit</RouterLink>
+        <div class="header-actions">
+          <button
+            v-if="(hasStarted || sessionExists) && !completed"
+            type="button"
+            class="ghost danger finish-button"
+            :disabled="submittingRun"
+            @click="finishRun"
+          >
+            Finish circuit
+          </button>
+          <RouterLink :to="`/circuits/${circuit.id}`" class="ghost">Back to edit</RouterLink>
+        </div>
       </header>
 
-      <div class="run-toolbar">
-        <div class="inline button-group">
-          <button v-if="!running && !completed" class="primary" @click="start">Start</button>
+        <div class="run-toolbar">
+          <div class="inline button-group">
+          <button v-if="!running && !completed && !hasStarted" class="primary" @click="start">Start</button>
           <button v-if="running" class="ghost" @click="pause">Pause</button>
           <button v-if="!running && !completed && hasStarted" class="ghost" @click="resume">Resume</button>
-          <button v-if="running || hasStarted" class="ghost" @click="completeActiveTask">Complete</button>
-          <button v-if="running || hasStarted" class="ghost" @click="skipCurrentTask">Skip</button>
           <button v-if="completed" class="primary" @click="restart">Restart</button>
         </div>
         <div class="sound-toggles">
@@ -66,9 +75,34 @@
                   <span aria-hidden="true">✓</span>
                   <span class="sr-only">Complete {{ task.name }}</span>
                 </button>
-                <button type="button" class="task-play" @click="startFrom(index)">
-                  <span aria-hidden="true">▶</span>
-                  <span class="sr-only">Start from {{ task.name }}</span>
+                <button
+                  type="button"
+                  class="task-skip"
+                  :disabled="index !== currentIndex || completed"
+                  @click="skipCurrentTask"
+                >
+                  <span aria-hidden="true">&gt;&gt;</span>
+                  <span class="sr-only">Skip {{ task.name }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="task-play"
+                  :class="{ active: index === currentIndex && running }"
+                  @click="toggleTaskControl(index)"
+                  :disabled="completed"
+                >
+                  <span aria-hidden="true">{{ index === currentIndex && running ? '⏸' : '▶' }}</span>
+                  <span class="sr-only">
+                    {{
+                      index === currentIndex
+                        ? running
+                          ? `Pause ${task.name}`
+                          : hasStarted
+                          ? `Resume ${task.name}`
+                          : `Start ${task.name}`
+                        : `Start from ${task.name}`
+                    }}
+                  </span>
                 </button>
               </div>
               <span
@@ -92,7 +126,13 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { RouterLink } from 'vue-router';
-import { getCircuit, createCircuitRun } from '../api';
+import {
+  getCircuit,
+  getCircuitSession,
+  updateCircuitSession,
+  deleteCircuitSession,
+  finishCircuitSession,
+} from '../api';
 import { useCircuitTitle } from '../composables/useCircuitTitle';
 
 const props = defineProps({
@@ -119,8 +159,13 @@ const taskRefs = ref([]);
 const taskRunner = ref(null);
 const taskStatuses = ref([]);
 const runStartedAt = ref(null);
+const elapsedBaseSeconds = ref(0);
+const lastResumedAt = ref(null);
 const submittingRun = ref(false);
 const hasRecordedRun = ref(false);
+const sessionStatus = ref('paused');
+const sessionExists = ref(false);
+const sessionLoaded = ref(false);
 const { setCircuitContext, clearCircuitContext } = useCircuitTitle();
 
 const completed = computed(() => circuit.value && currentIndex.value >= circuit.value.tasks.length);
@@ -195,6 +240,7 @@ function taskStatusLabel(status) {
 
 async function loadCircuit() {
   loading.value = true;
+  sessionLoaded.value = false;
   try {
     circuit.value = await getCircuit(props.id);
     taskRefs.value = [];
@@ -208,13 +254,111 @@ async function loadCircuit() {
     } else {
       clearCircuitContext();
     }
+    await loadSession();
   } catch (err) {
     circuit.value = null;
     taskStatuses.value = [];
     console.error(err);
     clearCircuitContext();
+    sessionExists.value = false;
+    sessionLoaded.value = true;
   } finally {
     loading.value = false;
+  }
+}
+
+function clampIndex(value, max) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  const limited = Math.max(0, Math.floor(value));
+  if (!Number.isFinite(max) || max < 0) {
+    return limited;
+  }
+  return Math.min(limited, max);
+}
+
+function normalisePositiveInteger(value, fallback = 0) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return Math.max(0, fallback);
+  }
+  return Math.floor(numeric);
+}
+
+function applySessionPayload(payload) {
+  if (!payload || !Array.isArray(circuit.value?.tasks)) {
+    return;
+  }
+  const tasks = Array.isArray(circuit.value.tasks) ? circuit.value.tasks : [];
+  const wasInProgress = payload.status === 'in_progress';
+  sessionExists.value = true;
+  sessionStatus.value = wasInProgress ? 'paused' : payload.status || 'paused';
+
+  const statuses = Array.isArray(payload.task_statuses)
+    ? payload.task_statuses.slice(0, tasks.length)
+    : [];
+  if (statuses.length === tasks.length) {
+    taskStatuses.value = statuses;
+  } else {
+    initializeTaskStatuses();
+  }
+
+  const nextIndex = clampIndex(payload.current_index ?? 0, tasks.length);
+  currentIndex.value = nextIndex;
+
+  const fallbackDuration =
+    nextIndex < tasks.length
+      ? tasks[nextIndex]?.duration ?? 0
+      : 0;
+  const remainingSeconds = normalisePositiveInteger(payload.remaining_seconds, fallbackDuration);
+  remaining.value = remainingSeconds;
+  remainingAtStart.value = remainingSeconds || 0;
+
+  hasStarted.value = Boolean(payload.has_started);
+
+  runStartedAt.value = payload.run_started_at ? new Date(payload.run_started_at) : null;
+  elapsedBaseSeconds.value = normalisePositiveInteger(
+    payload.elapsed_seconds_base ?? payload.elapsed_seconds,
+    0
+  );
+  lastResumedAt.value =
+    wasInProgress && payload.last_started_at
+      ? new Date(payload.last_started_at).getTime()
+      : null;
+
+  running.value = false;
+  taskStartedAt.value = null;
+  lastBeepSecond.value = null;
+
+  if (!hasStarted.value && runStartedAt.value) {
+    hasStarted.value = true;
+  }
+}
+
+async function loadSession() {
+  if (!circuit.value?.id) {
+    sessionExists.value = false;
+    sessionLoaded.value = true;
+    return;
+  }
+  try {
+    const payload = await getCircuitSession(circuit.value.id);
+    if (!payload) {
+      sessionExists.value = false;
+      sessionStatus.value = 'paused';
+      sessionLoaded.value = true;
+      return;
+    }
+    applySessionPayload(payload);
+    sessionLoaded.value = true;
+    if (payload.status === 'in_progress') {
+      queueSessionPersist('paused');
+    }
+  } catch (error) {
+    console.error('Failed to load circuit session', error);
+    sessionExists.value = false;
+    sessionLoaded.value = true;
   }
 }
 
@@ -230,6 +374,67 @@ function startTimer() {
   remainingAtStart.value = remaining.value || 0;
   taskStartedAt.value = Date.now();
   timer.value = setInterval(tick, 1000);
+}
+
+function captureElapsedFromRunning() {
+  if (!running.value || !lastResumedAt.value) {
+    return;
+  }
+  const delta = Math.floor((Date.now() - lastResumedAt.value) / 1000);
+  if (delta > 0) {
+    elapsedBaseSeconds.value += delta;
+  }
+}
+
+async function persistSession(statusOverride) {
+  if (!circuit.value?.id || !Array.isArray(circuit.value.tasks)) {
+    return;
+  }
+  if (!sessionLoaded.value && sessionExists.value) {
+    return;
+  }
+
+  const tasks = circuit.value.tasks;
+  if (!tasks.length) {
+    return;
+  }
+
+  const statuses = Array.isArray(taskStatuses.value)
+    ? taskStatuses.value.slice(0, tasks.length)
+    : [];
+  while (statuses.length < tasks.length) {
+    statuses.push('pending');
+  }
+
+  const status = statusOverride || (running.value ? 'in_progress' : 'paused');
+  const payload = {
+    status,
+    current_index: clampIndex(currentIndex.value, tasks.length),
+    remaining_seconds: normalisePositiveInteger(remaining.value, 0),
+    has_started: Boolean(hasStarted.value),
+    running: Boolean(running.value),
+    run_started_at: runStartedAt.value ? runStartedAt.value.toISOString() : null,
+    last_started_at:
+      status === 'in_progress' && lastResumedAt.value
+        ? new Date(lastResumedAt.value).toISOString()
+        : null,
+    elapsed_seconds: normalisePositiveInteger(elapsedBaseSeconds.value, 0),
+    task_statuses: statuses,
+  };
+
+  const response = await updateCircuitSession(circuit.value.id, payload);
+  sessionExists.value = true;
+  sessionLoaded.value = true;
+  sessionStatus.value = response?.status || status;
+}
+
+function queueSessionPersist(statusOverride) {
+  if (!circuit.value?.id || !Array.isArray(circuit.value.tasks)) {
+    return;
+  }
+  persistSession(statusOverride).catch((error) =>
+    console.error('Failed to update circuit session', error)
+  );
 }
 
 function ensureAudioContext() {
@@ -277,7 +482,7 @@ function maybePlayCountdown(nextRemaining) {
   playTone(frequency, 0.12, 0.22);
 }
 
-function resetTimer() {
+function resetTimer({ resetStatuses = true, resetSession = true } = {}) {
   clearTimer();
   currentIndex.value = 0;
   remaining.value = circuit.value?.tasks?.[0]?.duration ?? 0;
@@ -286,28 +491,38 @@ function resetTimer() {
   lastBeepSecond.value = null;
   taskStartedAt.value = null;
   remainingAtStart.value = remaining.value || 0;
-  runStartedAt.value = null;
   hasRecordedRun.value = false;
   submittingRun.value = false;
-  initializeTaskStatuses();
+  if (resetStatuses) {
+    initializeTaskStatuses();
+  }
+  if (resetSession) {
+    runStartedAt.value = null;
+    elapsedBaseSeconds.value = 0;
+    lastResumedAt.value = null;
+    sessionStatus.value = 'paused';
+    sessionExists.value = false;
+  }
 }
 
 async function finalizeRun(options = {}) {
-  const { markCurrentAs } = options;
-  if (
-    !circuit.value ||
-    !circuit.value.id ||
-    !runStartedAt.value ||
-    hasRecordedRun.value ||
-    submittingRun.value
-  ) {
+  const { markCurrentAs, skipIncomplete = false } = options;
+  if (!circuit.value || !circuit.value.id) {
+    return;
+  }
+  if (hasRecordedRun.value || submittingRun.value) {
     return;
   }
 
   const tasks = Array.isArray(circuit.value.tasks) ? circuit.value.tasks : [];
+  if (!tasks.length) {
+    return;
+  }
+
   const statuses = Array.isArray(taskStatuses.value)
-    ? taskStatuses.value.slice()
+    ? taskStatuses.value.slice(0, tasks.length)
     : Array.from({ length: tasks.length }, () => 'pending');
+
   if (
     typeof markCurrentAs === 'string' &&
     currentIndex.value < tasks.length &&
@@ -316,26 +531,51 @@ async function finalizeRun(options = {}) {
     statuses[currentIndex.value] = markCurrentAs;
   }
 
-  const normalized = tasks.map((_, index) => {
-    const status = statuses[index] || 'pending';
-    return {
-      index,
-      status: status === 'pending' ? 'not_done' : status,
-    };
+  const normalized = statuses.map((status) => {
+    const value = typeof status === 'string' ? status : 'pending';
+    if (value === 'completed') {
+      return 'completed';
+    }
+    if (value === 'skipped') {
+      return 'skipped';
+    }
+    if (skipIncomplete) {
+      return 'skipped';
+    }
+    return 'not_done';
   });
 
+  captureElapsedFromRunning();
+  running.value = false;
+  clearTimer();
+  remaining.value = 0;
+  taskStartedAt.value = null;
+  remainingAtStart.value = 0;
+  lastBeepSecond.value = null;
+  lastResumedAt.value = null;
+  sessionStatus.value = 'paused';
+
   const payload = {
-    started_at: runStartedAt.value.toISOString(),
+    task_statuses: normalized,
+    started_at: runStartedAt.value ? runStartedAt.value.toISOString() : null,
     ended_at: new Date().toISOString(),
-    tasks: normalized,
+    skip_incomplete: Boolean(skipIncomplete),
   };
 
   submittingRun.value = true;
   try {
-    await createCircuitRun(circuit.value.id, payload);
+    await finishCircuitSession(circuit.value.id, payload);
     hasRecordedRun.value = true;
+    sessionExists.value = false;
+    resetTimer();
+    sessionLoaded.value = true;
   } catch (error) {
     console.error('Failed to record circuit run history', error);
+    try {
+      await persistSession('paused');
+    } catch (persistError) {
+      console.error('Failed to persist paused session state', persistError);
+    }
   } finally {
     submittingRun.value = false;
   }
@@ -346,25 +586,39 @@ function start() {
   ensureAudioContext();
   hasStarted.value = true;
   running.value = true;
+  sessionStatus.value = 'in_progress';
   lastBeepSecond.value = null;
   markRunStarted();
+  lastResumedAt.value = Date.now();
+  queueSessionPersist('in_progress');
   startTimer();
 }
 
-function pause() {
-  syncRemainingWithClock();
+function pause(options = {}) {
+  const { persist = true } = options;
+  const remainingNow = syncRemainingWithClock();
+  captureElapsedFromRunning();
   running.value = false;
   clearTimer();
   taskStartedAt.value = null;
+  remaining.value = remainingNow;
   remainingAtStart.value = remaining.value || 0;
+  lastResumedAt.value = null;
+  sessionStatus.value = 'paused';
+  if (persist) {
+    queueSessionPersist('paused');
+  }
 }
 
 function resume() {
   if (completed.value) return;
   ensureAudioContext();
   running.value = true;
+  sessionStatus.value = 'in_progress';
   lastBeepSecond.value = null;
   markRunStarted();
+  lastResumedAt.value = Date.now();
+  queueSessionPersist('in_progress');
   startTimer();
 }
 
@@ -377,9 +631,12 @@ function startFrom(index) {
   remaining.value = circuit.value.tasks[index].duration;
   hasStarted.value = true;
   running.value = true;
+  sessionStatus.value = 'in_progress';
   lastBeepSecond.value = null;
   remainingAtStart.value = remaining.value || 0;
   markRunStarted();
+  lastResumedAt.value = Date.now();
+  queueSessionPersist('in_progress');
   startTimer();
 }
 
@@ -394,13 +651,44 @@ function completeTask(index) {
   advance(false, 'completed');
 }
 
-function completeActiveTask() {
-  completeTask(currentIndex.value);
+function toggleTaskControl(index) {
+  if (!circuit.value) return;
+  if (completed.value) return;
+  if (index !== currentIndex.value) {
+    startFrom(index);
+    return;
+  }
+  if (running.value) {
+    pause();
+  } else if (hasStarted.value) {
+    resume();
+  } else {
+    start();
+  }
 }
 
 async function restart() {
-  await finalizeRun({ markCurrentAs: 'not_done' });
+  captureElapsedFromRunning();
+  running.value = false;
+  clearTimer();
+  taskStartedAt.value = null;
+  lastBeepSecond.value = null;
+  lastResumedAt.value = null;
+  remaining.value = circuit.value?.tasks?.[0]?.duration ?? 0;
+  remainingAtStart.value = remaining.value || 0;
+  if (circuit.value?.id) {
+    try {
+      await deleteCircuitSession(circuit.value.id);
+    } catch (error) {
+      console.error('Failed to clear circuit session', error);
+    }
+  }
   resetTimer();
+  sessionLoaded.value = true;
+}
+
+async function finishRun() {
+  await finalizeRun({ skipIncomplete: true });
 }
 
 function advance(triggeredByTimer = false, statusOverride = null) {
@@ -419,11 +707,13 @@ function advance(triggeredByTimer = false, statusOverride = null) {
   currentIndex.value = nextIndex;
   lastBeepSecond.value = null;
   if (willComplete) {
+    captureElapsedFromRunning();
     clearTimer();
     running.value = false;
     remaining.value = 0;
     taskStartedAt.value = null;
     remainingAtStart.value = 0;
+    lastResumedAt.value = null;
     Promise.resolve()
       .then(() => finalizeRun())
       .catch((error) => console.error('Failed to finalize run', error));
@@ -435,6 +725,7 @@ function advance(triggeredByTimer = false, statusOverride = null) {
     } else {
       taskStartedAt.value = null;
     }
+    queueSessionPersist();
   }
 }
 
@@ -509,7 +800,14 @@ watch(
   () => props.id,
   async (newId, oldId) => {
     if (newId && newId !== oldId) {
-      await finalizeRun({ markCurrentAs: 'not_done' });
+      if (running.value || hasStarted.value || sessionExists.value) {
+        pause({ persist: false });
+        try {
+          await persistSession('paused');
+        } catch (error) {
+          console.error('Failed to persist session before switching circuit', error);
+        }
+      }
       await loadCircuit();
     }
   }
@@ -527,9 +825,12 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  finalizeRun({ markCurrentAs: 'not_done' }).catch((error) =>
-    console.error('Failed to finalize run', error)
-  );
+  if (running.value || hasStarted.value || sessionExists.value) {
+    pause({ persist: false });
+    persistSession('paused').catch((error) =>
+      console.error('Failed to persist session on teardown', error)
+    );
+  }
   clearTimer();
   if (audioContext.value && typeof audioContext.value.close === 'function') {
     audioContext.value.close();
@@ -548,6 +849,43 @@ onBeforeUnmount(() => {
 .run-shell {
   display: grid;
   gap: 1.75rem;
+}
+
+.run-header {
+  gap: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.header-actions .ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-decoration: none;
+  font-weight: 600;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.header-actions .ghost:hover {
+  border-color: rgba(124, 58, 237, 0.45);
+  background: rgba(124, 58, 237, 0.08);
+  box-shadow: 0 8px 20px -16px rgba(15, 118, 110, 0.35);
+}
+
+.finish-button {
+  font-weight: 700;
+}
+
+.finish-button:disabled {
+  cursor: not-allowed;
 }
 
 .run-toolbar {
@@ -701,6 +1039,17 @@ onBeforeUnmount(() => {
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
+.task-play.active {
+  background: rgba(124, 58, 237, 0.12);
+  box-shadow: 0 10px 18px -16px rgba(124, 58, 237, 0.45);
+}
+
+.task-play:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .task-play:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 18px -16px rgba(124, 58, 237, 0.55);
@@ -709,6 +1058,32 @@ onBeforeUnmount(() => {
 
 .task-play span[aria-hidden='true'] {
   font-size: 1rem;
+}
+
+.task-skip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: #fffbeb;
+  color: #b45309;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.task-skip:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px -16px rgba(245, 158, 11, 0.45);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.task-skip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .status-chip {

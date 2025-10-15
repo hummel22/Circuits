@@ -71,6 +71,39 @@ export async function createCircuitRun(circuitId, payload) {
   return handleResponse(response);
 }
 
+export async function getCircuitSession(circuitId) {
+  const response = await fetch(`${BASE_URL}/circuits/${circuitId}/session`);
+  if (response.status === 404) {
+    return null;
+  }
+  return handleResponse(response);
+}
+
+export async function updateCircuitSession(circuitId, payload) {
+  const response = await fetch(`${BASE_URL}/circuits/${circuitId}/session`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function deleteCircuitSession(circuitId) {
+  const response = await fetch(`${BASE_URL}/circuits/${circuitId}/session`, {
+    method: 'DELETE',
+  });
+  return handleResponse(response);
+}
+
+export async function finishCircuitSession(circuitId, payload) {
+  const response = await fetch(`${BASE_URL}/circuits/${circuitId}/session/finish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
 export async function listCircuitRuns() {
   const response = await fetch(`${BASE_URL}/runs`);
   return handleResponse(response);
