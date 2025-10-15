@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
 from .database import get_session, init_db
-from .models import Circuit, CircuitRun, CircuitRunTask
+from .models import Circuit, CircuitRun, CircuitRunSession, CircuitRunTask
 
 BASE_DIR = Path(__file__).resolve().parent
 SPA_DIR = BASE_DIR / "static"
@@ -25,6 +25,8 @@ if SPA_ASSETS_DIR.exists():
 
 
 TASK_STATUS_VALUES = {"completed", "skipped", "not_done"}
+SESSION_STATUS_VALUES = {"paused", "in_progress"}
+SESSION_TASK_STATUS_VALUES = TASK_STATUS_VALUES | {"pending"}
 
 
 def format_datetime(value: datetime | None) -> str | None:
@@ -52,6 +54,30 @@ def parse_iso_datetime(raw: Any, field_name: str) -> datetime:
     if parsed.tzinfo is None:
         return parsed
     return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def parse_optional_iso_datetime(raw: Any, field_name: str) -> datetime | None:
+    if raw in (None, ""):
+        return None
+    return parse_iso_datetime(raw, field_name)
+
+
+def parse_session_task_statuses(raw: Any, expected_length: int) -> list[str]:
+    if not isinstance(raw, list):
+        raise ValueError("task_statuses must be an array.")
+    if expected_length >= 0 and len(raw) != expected_length:
+        raise ValueError("task_statuses length must match the number of circuit tasks.")
+    statuses: list[str] = []
+    for value in raw:
+        if not isinstance(value, str):
+            raise ValueError("Each task status must be a string.")
+        normalized = value.strip().lower()
+        if normalized not in SESSION_TASK_STATUS_VALUES:
+            raise ValueError(
+                "Task status must be one of pending, completed, skipped, or not_done."
+            )
+        statuses.append(normalized)
+    return statuses
 
 
 def serialize_run_model(
@@ -91,13 +117,50 @@ def serialize_run_model(
     }
 
 
-def serialize_circuit_model(circuit: Circuit) -> Dict[str, Any]:
+def serialize_session_model(session_model: CircuitRunSession) -> Dict[str, Any]:
+    try:
+        statuses_raw = json.loads(session_model.task_statuses_json)
+        if not isinstance(statuses_raw, list):
+            statuses_raw = []
+    except json.JSONDecodeError:
+        statuses_raw = []
+
+    elapsed = session_model.elapsed_seconds or 0
+    if (
+        session_model.status == "in_progress"
+        and session_model.last_started_at is not None
+    ):
+        delta = datetime.utcnow() - session_model.last_started_at
+        if delta.total_seconds() > 0:
+            elapsed += int(delta.total_seconds())
+
+    return {
+        "id": session_model.id,
+        "status": session_model.status,
+        "current_index": session_model.current_task_index,
+        "remaining_seconds": session_model.remaining_seconds,
+        "has_started": session_model.has_started,
+        "running": session_model.running,
+        "run_started_at": format_datetime(session_model.run_started_at),
+        "last_started_at": format_datetime(session_model.last_started_at),
+        "elapsed_seconds": max(elapsed, 0),
+        "elapsed_seconds_base": max(session_model.elapsed_seconds or 0, 0),
+        "task_statuses": statuses_raw,
+        "updated_at": format_datetime(session_model.updated_at),
+        "created_at": format_datetime(session_model.created_at),
+    }
+
+
+def serialize_circuit_model(
+    circuit: Circuit, active_run: CircuitRunSession | None = None
+) -> Dict[str, Any]:
     return {
         "id": circuit.id,
         "name": circuit.name,
         "description": circuit.description,
         "created_at": format_datetime(circuit.created_at),
         "tasks": circuit.tasks(),
+        "active_run": serialize_session_model(active_run) if active_run else None,
     }
 
 
@@ -164,6 +227,156 @@ def create_or_update_circuit(session: Session, circuit: Circuit | None, payload:
     session.commit()
     session.refresh(circuit)
     return circuit
+
+
+def get_circuit_session(session: Session, circuit_id: int) -> CircuitRunSession | None:
+    return session.exec(
+        select(CircuitRunSession).where(CircuitRunSession.circuit_id == circuit_id)
+    ).first()
+
+
+def upsert_circuit_session(
+    session: Session, circuit: Circuit, payload: Dict[str, Any]
+) -> CircuitRunSession:
+    if circuit.id is None:
+        raise ValueError("Circuit must be persisted before updating a session.")
+
+    if not isinstance(payload, dict):
+        raise ValueError("Session payload must be a JSON object.")
+
+    tasks = circuit.tasks()
+    statuses = parse_session_task_statuses(payload.get("task_statuses"), len(tasks))
+
+    status = payload.get("status", "paused")
+    if status not in SESSION_STATUS_VALUES:
+        raise ValueError("status must be either paused or in_progress.")
+
+    current_index = payload.get("current_index", 0)
+    if not isinstance(current_index, int) or current_index < 0:
+        raise ValueError("current_index must be a non-negative integer.")
+    if current_index > len(tasks):
+        raise ValueError("current_index cannot exceed the number of tasks.")
+
+    remaining_seconds_raw = payload.get("remaining_seconds", 0)
+    try:
+        remaining_seconds = int(remaining_seconds_raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("remaining_seconds must be an integer.") from exc
+    if remaining_seconds < 0:
+        remaining_seconds = 0
+
+    elapsed_raw = payload.get("elapsed_seconds", 0)
+    try:
+        elapsed_seconds = int(elapsed_raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("elapsed_seconds must be an integer.") from exc
+    if elapsed_seconds < 0:
+        elapsed_seconds = 0
+
+    has_started = bool(payload.get("has_started", False))
+    running = bool(payload.get("running", False))
+
+    run_started_at = parse_optional_iso_datetime(
+        payload.get("run_started_at"), "run_started_at"
+    )
+    last_started_at = parse_optional_iso_datetime(
+        payload.get("last_started_at"), "last_started_at"
+    )
+
+    if status == "paused":
+        last_started_at = None
+    elif last_started_at is None:
+        last_started_at = datetime.utcnow()
+
+    instance = get_circuit_session(session, circuit.id)
+    if instance is None:
+        instance = CircuitRunSession(circuit_id=circuit.id)
+        session.add(instance)
+
+    instance.status = status
+    instance.current_task_index = min(current_index, len(tasks))
+    instance.remaining_seconds = remaining_seconds
+    instance.has_started = has_started
+    instance.running = running
+    instance.run_started_at = run_started_at
+    instance.last_started_at = last_started_at
+    instance.elapsed_seconds = elapsed_seconds
+    instance.task_statuses_json = json.dumps(statuses, ensure_ascii=False)
+    instance.updated_at = datetime.utcnow()
+
+    session.commit()
+    session.refresh(instance)
+    return instance
+
+
+def remove_circuit_session(session: Session, circuit_id: int) -> bool:
+    instance = get_circuit_session(session, circuit_id)
+    if instance is None:
+        return False
+    session.delete(instance)
+    session.commit()
+    return True
+
+
+def finalize_circuit_session(
+    session: Session, circuit: Circuit, payload: Dict[str, Any]
+) -> tuple[CircuitRun, List[CircuitRunTask]]:
+    if circuit.id is None:
+        raise ValueError("Circuit must be persisted before finalizing a run.")
+
+    tasks = circuit.tasks()
+    if not tasks:
+        raise ValueError("Circuit must include tasks before recording a run.")
+
+    session_model = get_circuit_session(session, circuit.id)
+
+    statuses_payload = payload.get("task_statuses")
+    if statuses_payload is None:
+        if session_model is None:
+            raise ValueError("task_statuses are required to finish this circuit.")
+        try:
+            statuses_payload = json.loads(session_model.task_statuses_json)
+        except json.JSONDecodeError as exc:
+            raise ValueError("Stored task statuses are invalid.") from exc
+
+    statuses = parse_session_task_statuses(statuses_payload, len(tasks))
+
+    skip_incomplete = bool(payload.get("skip_incomplete", False))
+    normalized_statuses: List[Dict[str, Any]] = []
+    for index, status in enumerate(statuses):
+        normalized = status
+        if normalized not in TASK_STATUS_VALUES:
+            normalized = "completed" if status == "completed" else "not_done"
+        if normalized == "not_done" and status == "pending":
+            normalized = "not_done"
+        if skip_incomplete and normalized != "completed":
+            normalized = "skipped"
+        normalized_statuses.append({"index": index, "status": normalized})
+
+    started_at = parse_optional_iso_datetime(payload.get("started_at"), "started_at")
+    ended_at = parse_optional_iso_datetime(payload.get("ended_at"), "ended_at")
+    if started_at is None:
+        if session_model and session_model.run_started_at:
+            started_at = session_model.run_started_at
+        else:
+            started_at = datetime.utcnow()
+    if ended_at is None:
+        ended_at = datetime.utcnow()
+
+    run_payload = {
+        "started_at": started_at.isoformat(),
+        "ended_at": ended_at.isoformat(),
+        "tasks": normalized_statuses,
+    }
+
+    run, task_models = record_circuit_run(session, circuit, run_payload)
+
+    if session_model is not None:
+        session.delete(session_model)
+        session.commit()
+        session.refresh(run)
+
+    return run, task_models
 
 
 def record_circuit_run(
@@ -266,15 +479,35 @@ def get_circuit_or_404(circuit_id: int) -> Circuit:
 
 @app.get("/api/circuits/{circuit_id}")
 def circuit_api(circuit_id: int):
-    circuit = get_circuit_or_404(circuit_id)
-    return serialize_circuit_model(circuit)
+    with get_session() as session:
+        circuit = session.get(Circuit, circuit_id)
+        if circuit is None:
+            raise HTTPException(status_code=404, detail="Circuit not found")
+        active = get_circuit_session(session, circuit_id)
+        session.expunge(circuit)
+        if active is not None:
+            session.expunge(active)
+    return serialize_circuit_model(circuit, active)
 
 
 @app.get("/api/circuits")
 def circuits_api():
     with get_session() as session:
         circuits = session.exec(select(Circuit).order_by(Circuit.created_at.desc())).all()
-    return [serialize_circuit_model(circuit) for circuit in circuits]
+        circuit_ids = [c.id for c in circuits if c.id is not None]
+        sessions_map: Dict[int, CircuitRunSession] = {}
+        if circuit_ids:
+            sessions = session.exec(
+                select(CircuitRunSession).where(
+                    CircuitRunSession.circuit_id.in_(circuit_ids)
+                )
+            ).all()
+            sessions_map = {s.circuit_id: s for s in sessions}
+        data = [
+            serialize_circuit_model(circuit, sessions_map.get(circuit.id))
+            for circuit in circuits
+        ]
+    return data
 
 
 @app.post("/api/circuits", status_code=status.HTTP_201_CREATED)
@@ -319,6 +552,60 @@ def api_create_run(circuit_id: int, payload: Dict[str, Any]):
             raise HTTPException(status_code=404, detail="Circuit not found")
         try:
             run, tasks = record_circuit_run(session, circuit, payload)
+        except ValueError as exc:
+            session.rollback()
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        data = serialize_run_model(run, tasks, circuit)
+    return data
+
+
+@app.get("/api/circuits/{circuit_id}/session")
+def api_get_run_session(circuit_id: int):
+    with get_session() as session:
+        circuit = session.get(Circuit, circuit_id)
+        if circuit is None:
+            raise HTTPException(status_code=404, detail="Circuit not found")
+        session_model = get_circuit_session(session, circuit_id)
+        if session_model is None:
+            raise HTTPException(status_code=404, detail="Circuit run session not found")
+        session.expunge(session_model)
+    return serialize_session_model(session_model)
+
+
+@app.put("/api/circuits/{circuit_id}/session")
+def api_upsert_run_session(circuit_id: int, payload: Dict[str, Any]):
+    with get_session() as session:
+        circuit = session.get(Circuit, circuit_id)
+        if circuit is None:
+            raise HTTPException(status_code=404, detail="Circuit not found")
+        try:
+            session_model = upsert_circuit_session(session, circuit, payload)
+        except ValueError as exc:
+            session.rollback()
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return serialize_session_model(session_model)
+
+
+@app.delete("/api/circuits/{circuit_id}/session", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_run_session(circuit_id: int):
+    with get_session() as session:
+        circuit = session.get(Circuit, circuit_id)
+        if circuit is None:
+            raise HTTPException(status_code=404, detail="Circuit not found")
+        removed = remove_circuit_session(session, circuit_id)
+    if not removed:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.post("/api/circuits/{circuit_id}/session/finish", status_code=status.HTTP_201_CREATED)
+def api_finish_run_session(circuit_id: int, payload: Dict[str, Any]):
+    with get_session() as session:
+        circuit = session.get(Circuit, circuit_id)
+        if circuit is None:
+            raise HTTPException(status_code=404, detail="Circuit not found")
+        try:
+            run, tasks = finalize_circuit_session(session, circuit, payload)
         except ValueError as exc:
             session.rollback()
             raise HTTPException(status_code=422, detail=str(exc)) from exc
