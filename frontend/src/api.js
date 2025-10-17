@@ -108,3 +108,10 @@ export async function listCircuitRuns() {
   const response = await fetch(`${BASE_URL}/runs`);
   return handleResponse(response);
 }
+
+export async function deleteCircuitRun(id) {
+  const response = await fetch(`${BASE_URL}/runs/${id}`, {
+    method: 'DELETE',
+  });
+  return handleResponse(response);
+}

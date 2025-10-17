@@ -89,8 +89,20 @@
               <span class="detail-duration">{{ selectedRun.completedMinutesLabel }} / {{ selectedRun.totalMinutesLabel }} min</span>
             </p>
           </div>
-          <button type="button" class="ghost close" @click="closeRunDetails" aria-label="Close details">×</button>
+          <div class="run-detail-actions">
+            <button
+              type="button"
+              class="ghost danger"
+              @click="deleteSelectedRun"
+              :disabled="deletingRun"
+            >
+              <span v-if="deletingRun">Deleting…</span>
+              <span v-else>Delete</span>
+            </button>
+            <button type="button" class="ghost close" @click="closeRunDetails" aria-label="Close details">×</button>
+          </div>
         </header>
+        <p v-if="deleteError" class="run-detail-error" role="alert">{{ deleteError }}</p>
         <div class="run-detail-counts">
           <span class="count completed">✓ {{ selectedRun.completedCount }} completed</span>
           <span class="count skipped">↷ {{ selectedRun.skippedCount }} skipped</span>
@@ -115,7 +127,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { listCircuitRuns } from '../api';
+import { deleteCircuitRun, listCircuitRuns } from '../api';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const runs = ref([]);
@@ -124,6 +136,8 @@ const error = ref('');
 const today = new Date();
 const currentMonth = ref(new Date(today.getFullYear(), today.getMonth(), 1));
 const selectedRun = ref(null);
+const deletingRun = ref(false);
+const deleteError = ref('');
 
 const monthFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'long',
@@ -327,11 +341,13 @@ function goToToday() {
 }
 
 function openRunDetails(run) {
+  deleteError.value = '';
   selectedRun.value = run;
 }
 
 function closeRunDetails() {
   selectedRun.value = null;
+  deleteError.value = '';
 }
 
 function statusLabel(status) {
@@ -349,6 +365,39 @@ function statusIcon(status) {
 function handleKeydown(event) {
   if (event.key === 'Escape' && selectedRun.value) {
     closeRunDetails();
+  }
+}
+
+async function deleteSelectedRun() {
+  if (!selectedRun.value || deletingRun.value) {
+    return;
+  }
+
+  const confirmed = window.confirm('Delete this run from your history?');
+  if (!confirmed) {
+    return;
+  }
+
+  deleteError.value = '';
+  deletingRun.value = true;
+
+  const runKey = selectedRun.value.id;
+  const runId = Number(runKey);
+  if (!Number.isFinite(runId)) {
+    deleteError.value = 'Unable to delete this run.';
+    deletingRun.value = false;
+    return;
+  }
+
+  try {
+    await deleteCircuitRun(runId);
+    runs.value = runs.value.filter((run) => run.id !== runKey && Number(run.id) !== runId);
+    closeRunDetails();
+  } catch (err) {
+    console.error(err);
+    deleteError.value = err instanceof Error ? err.message : 'Failed to delete run.';
+  } finally {
+    deletingRun.value = false;
   }
 }
 
@@ -573,6 +622,12 @@ onBeforeUnmount(() => {
   gap: 1rem;
 }
 
+.run-detail-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .run-detail-heading {
   display: grid;
   gap: 0.35rem;
@@ -603,6 +658,12 @@ onBeforeUnmount(() => {
 .detail-percent {
   font-weight: 700;
   color: #0f766e;
+}
+
+.run-detail-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.85rem;
 }
 
 .run-detail-counts {
