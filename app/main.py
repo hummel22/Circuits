@@ -644,6 +644,25 @@ def api_list_runs():
     return data
 
 
+@app.delete("/api/runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_run(run_id: int):
+    with get_session() as session:
+        run = session.get(CircuitRun, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="Run not found")
+
+        tasks = session.exec(
+            select(CircuitRunTask).where(CircuitRunTask.run_id == run_id)
+        ).all()
+        for task in tasks:
+            session.delete(task)
+
+        session.delete(run)
+        session.commit()
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.get("/api/circuit-schema")
 def circuit_schema():
     schema = {
